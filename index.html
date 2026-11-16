@@ -141,6 +141,32 @@
       ol.timeline .dot { position: absolute; left: -7px; top: 6px; height: 12px; width: 12px; border-radius: 50%; border: 2px solid var(--bg); background: var(--gold); }
       ol.timeline .date { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); margin: 0; }
       ol.timeline h3 { font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; margin: 0.125rem 0 0.375rem; }
+      ol.timeline li.chron-focus { background: var(--surface); outline: 1px solid var(--gold); border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--gold); padding-right: 0.75rem; }
+
+      /* Timeline page: chronological spine, oldest first */
+      .tl-era { display: flex; justify-content: center; margin-top: 1.25rem; }
+      .tl-era span { border: 1px solid var(--gold); border-radius: 999px; background: var(--surface); color: var(--accent-deep); padding: 0.25rem 0.875rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+      ol.tl-list { position: relative; list-style: none; margin: 1.5rem 0 0; padding: 0; }
+      ol.tl-list::before { content: ""; position: absolute; left: 11px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
+      ol.tl-list li.tl-item { position: relative; padding: 0 0 1.25rem 2.25rem; }
+      ol.tl-list li.tl-item:last-child { padding-bottom: 0.25rem; }
+      .tl-dot { position: absolute; left: 5px; top: 1.125rem; width: 10px; height: 10px; transform: rotate(45deg); border: 2px solid var(--gold); background: var(--bg); z-index: 1; }
+      .tl-item.gm .tl-dot { border-color: var(--danger); }
+      .tl-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0.875rem 1rem; }
+      .tl-item.gm .tl-card { border-left: 4px solid var(--danger); }
+      .tl-date { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); margin: 0; }
+      .tl-card h3 { font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0.25rem 0 0; overflow-wrap: break-word; }
+      .tl-excerpt { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.55; color: var(--dim); overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .tl-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+      .tl-link { border: 1px solid var(--border); background: var(--surface-alt); color: var(--text); border-radius: 999px; padding: 0.375rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; font: inherit; }
+      .tl-link.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+      @media (min-width: 720px) {
+        ol.tl-list::before { left: 50%; margin-left: -1px; }
+        ol.tl-list li.tl-item { width: 50%; padding: 0 2.25rem 1.5rem 0; }
+        ol.tl-list li.tl-item.alt { margin-left: 50%; padding: 0 0 1.5rem 2.25rem; }
+        ol.tl-list li.tl-item .tl-dot { left: auto; right: -7px; }
+        ol.tl-list li.tl-item.alt .tl-dot { left: -7px; right: auto; }
+      }
 
       /* Threads */
       .thread-card { display: flex; flex-direction: column; align-items: stretch; height: 100%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
@@ -343,6 +369,7 @@
         "hero.title": "Dawn at the Ashen Hollows",
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
+        "timeline.intro": "The road in order, oldest first, in the days of 101 AE. Every moment here comes from a Chronicle entry, and each one links back to that entry.",
         "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it.",
         "footer.sync": SYNC_SUMMARY
       };
@@ -579,6 +606,7 @@
         showPins: true,
         showLabels: true,
         selectedPinId: null,
+        chronicleFocus: null,
         selectedMarkerId: null,
         focusPinId: null,
         gmError: "",
@@ -757,6 +785,7 @@
       var NAV = [
         { key: "wiki", label: "Wiki" },
         { key: "chronicle", label: "Chronicle" },
+        { key: "timeline", label: "Timeline" },
         { key: "people", label: "People" },
         { key: "maps", label: "Maps" },
         { key: "mysteries", label: "Mysteries" }
@@ -810,6 +839,7 @@
         if (state.view === "gm" && !gmIsUnlocked()) state.view = "gmsignin";
         if (state.view === "wiki") renderWiki(main);
         else if (state.view === "chronicle") renderChronicle(main);
+        else if (state.view === "timeline") renderTimeline(main);
         else if (state.view === "people") renderPeople(main);
         else if (state.view === "maps") renderMaps(main);
         else if (state.view === "mysteries") renderMysteries(main);
@@ -1284,10 +1314,91 @@
           + '<ol class="timeline">';
         entries.forEach(function (e) {
           var isGm = !!e.gmOnly;
-          html += '<li><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + "</li>";
+          var focus = state.chronicleFocus && state.chronicleFocus === e.key;
+          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + "</li>";
         });
         html += "</ol></div>";
         main.innerHTML = html;
+        if (state.chronicleFocus) {
+          var target = main.querySelector('[data-chron="' + state.chronicleFocus + '"]');
+          state.chronicleFocus = null;
+          if (target) target.scrollIntoView({ block: "center" });
+        }
+        decorateSiteText(main);
+      }
+
+      // ---------- Timeline ----------
+      // The Timeline holds no moments of its own. It lays the Chronicle
+      // entries out oldest first, in in-world date order, and every moment
+      // is drawn live from visibleChronicle(), so GM-only entries reach
+      // this view only through the same passcode payload as the Chronicle
+      // itself. Signed out, they are never in the data this page holds.
+      function chronicleRelations(e) {
+        var hay = (e.title + "\n" + e.body).toLowerCase();
+        var loreHits = [], peopleHits = [], i, t;
+        var lore = visibleLore();
+        for (i = 0; i < lore.length; i++) {
+          t = lore[i].title || "";
+          if (t.length > 3 && (hay.indexOf(t.toLowerCase()) !== -1 || hay.indexOf(t.replace(/^The /, "").toLowerCase()) !== -1)) loreHits.push(lore[i]);
+        }
+        var people = visiblePeople();
+        for (i = 0; i < people.length; i++) {
+          t = people[i].name || "";
+          if (t.length > 2 && hay.indexOf(t.toLowerCase()) !== -1) peopleHits.push(people[i]);
+        }
+        return { lore: loreHits.slice(0, 3), people: peopleHits.slice(0, 3) };
+      }
+      function renderTimeline(main) {
+        var entries = visibleChronicle().slice().sort(function (a, b) { return a.sortKey - b.sortKey; });
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">Timeline</h2>'
+          + '<p class="small muted" style="margin-top:0.25rem" data-st="timeline.intro">' + esc(siteText("timeline.intro")) + "</p>"
+          + (gmIsUnlocked() ? '<p class="small" style="margin-top:0.25rem">GM signed in: the GM-only moments are shown here and marked. Signed-out visitors see the player moments only.</p>' : "")
+          + syncNoticeHtml()
+          + '<p style="margin-top:1rem;text-align:center" class="small muted">' + entries.length + (entries.length === 1 ? " moment" : " moments") + " \u00B7 Year 101 AE</p>"
+          + '<div class="tl-era" aria-hidden="true"><span>101 AE</span></div>';
+        if (!chronicleTableOk && dataLoaded) {
+          html += '<p style="margin-top:2rem;text-align:center" class="muted">The timeline could not be loaded. Live sync is not connected. Try again.</p>';
+        } else if (entries.length === 0) {
+          html += '<p style="margin-top:2rem;text-align:center" class="muted">No moments yet. The Chronicle is still empty.</p>';
+        } else {
+          html += '<ol class="tl-list">';
+          entries.forEach(function (e, idx) {
+            var isGm = !!e.gmOnly;
+            var rel = chronicleRelations(e);
+            html += '<li class="tl-item' + (idx % 2 === 1 ? " alt" : "") + (isGm ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
+              + '<article class="tl-card"><p class="tl-date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
+              + "<h3>" + esc(e.title) + "</h3>"
+              + '<p class="tl-excerpt">' + esc(firstPara(e.body)) + "</p>"
+              + '<div class="tl-links"><button type="button" class="tl-link primary" data-tl-chron="' + esc(e.key) + '">Read in the Chronicle</button>';
+            rel.lore.forEach(function (l) {
+              html += '<button type="button" class="tl-link" data-tl-lore="' + esc(l.key) + '">Article: ' + esc(l.title) + "</button>";
+            });
+            rel.people.forEach(function (p) {
+              html += '<button type="button" class="tl-link" data-tl-person="' + esc(p.key) + '">' + esc(p.name) + "</button>";
+            });
+            html += "</div></article></li>";
+          });
+          html += "</ol>";
+        }
+        html += "</div>";
+        main.innerHTML = html;
+        var chronBtns = main.querySelectorAll("[data-tl-chron]");
+        for (var i = 0; i < chronBtns.length; i++) chronBtns[i].addEventListener("click", function () {
+          state.chronicleFocus = this.getAttribute("data-tl-chron");
+          state.view = "chronicle";
+          state.reader = null;
+          render();
+        });
+        var loreBtns = main.querySelectorAll("[data-tl-lore]");
+        for (var j = 0; j < loreBtns.length; j++) loreBtns[j].addEventListener("click", function () {
+          var e = loreByKey(this.getAttribute("data-tl-lore"));
+          if (e) { state.reader = { kind: "lore", entry: e }; state.view = "wiki"; render(); window.scrollTo(0, 0); }
+        });
+        var pplBtns = main.querySelectorAll("[data-tl-person]");
+        for (var k = 0; k < pplBtns.length; k++) pplBtns[k].addEventListener("click", function () {
+          var p = visiblePersonByKey(this.getAttribute("data-tl-person"));
+          if (p) { state.reader = { kind: "person", person: p }; state.view = "people"; render(); window.scrollTo(0, 0); }
+        });
         decorateSiteText(main);
       }
 
