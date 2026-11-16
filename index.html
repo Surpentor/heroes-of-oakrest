@@ -557,7 +557,7 @@
       // ---------- Writes shared by GM tools ----------
       function fileReviewItem(kind, title, body, relatedKey) {
         if (!sb || !gmIsUnlocked()) return Promise.resolve(false);
-        return sb.from("review_items").insert({ kind: kind, title: title, body: body, question: title, source_note: body, status: "pending", related_key: relatedKey || null }).then(function (res) { return !res.error; }, function () { return false; });
+        return sb.from("review_items").insert({ kind: kind, title: title, body: body, question: title, source_note: body, status: "pending", related_key: relatedKey || null }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
       }
       function uploadToStorage(file, folder, keyHint) {
         if (!sb) return Promise.reject(new Error("Live sync is not connected."));
@@ -778,7 +778,7 @@
           var value = document.getElementById("stText").value;
           var msg = document.getElementById("stMsg");
           if (!sb) { msg.textContent = "Live sync is not connected, so the change cannot be saved."; return; }
-          sb.from("site_text").upsert({ text_key: key, value: value, updated_by: "gm" }).then(function (res) {
+          sb.from("site_text").upsert({ text_key: key, value: value, updated_by: "gm" }, { returning: "minimal" }).then(function (res) {
             if (res.error) { msg.textContent = "The change could not be saved. Live sync is not connected."; return; }
             var before = current;
             SITE_TEXT[key] = value; siteTextTableOk = true;
@@ -789,7 +789,7 @@
         document.getElementById("stRestore").addEventListener("click", function () {
           var msg = document.getElementById("stMsg");
           if (!sb) { msg.textContent = "Live sync is not connected, so the original cannot be restored right now."; return; }
-          sb.from("site_text").delete().eq("text_key", key).then(function (res) {
+          sb.from("site_text").delete({ returning: "minimal" }).eq("text_key", key).then(function (res) {
             if (res.error) { msg.textContent = "The original could not be restored. Live sync is not connected."; return; }
             delete SITE_TEXT[key];
             fileReviewItem("site_text", "Site text restored: " + key, "Restored to the original wording: " + siteText(key), key);
@@ -875,7 +875,7 @@
               ? { cover_image_url: url, cover_storage_path: path, cover_fit: c.fit, cover_position: c.fx + "% " + c.fy + "%", cover_focal_x: c.fx, cover_focal_y: c.fy, cover_zoom: c.zoom, cover_image_id: imageId }
               : { portrait_url: url, portrait_storage_path: path, portrait_fit: c.fit, portrait_position: c.fx + "% " + c.fy + "%", portrait_zoom: c.zoom, cover_focal_x: c.fx, cover_focal_y: c.fy, cover_image_id: imageId };
             var table = kind === "lore" ? "lore_entries" : "people";
-            sb.from(table).update(patch).eq("id", target.id).then(function (res) {
+            sb.from(table).update(patch, { returning: "minimal" }).eq("id", target.id).then(function (res) {
               if (res.error) {
                 if (path) removeStorageObject(path);
                 msg.textContent = "The cover could not be saved. Live sync is not connected.";
@@ -892,7 +892,7 @@
           if (file) {
             msg.textContent = "Uploading.";
             uploadToStorage(file, kind === "lore" ? "covers" : "portraits", target.key).then(function (up) {
-              sb.from("content_images").insert({ filename: file.name, storage_path: up.path, image_url: up.url, used_in: kind + ":" + target.id }).then(function (res) {
+              sb.from("content_images").insert({ filename: file.name, storage_path: up.path, image_url: up.url, used_in: kind + ":" + target.id }, { returning: "minimal" }).then(function (res) {
                 if (res.error || !res) { removeStorageObject(up.path); msg.textContent = "The upload finished but the library row could not be saved, so the file was removed."; return; }
                 loadLiveSoft(function () {
                   var newRow = null;
@@ -918,7 +918,7 @@
           var patch = kind === "lore"
             ? { cover_image_url: null, cover_storage_path: null, cover_image_id: null }
             : { portrait_url: null, portrait_storage_path: null, cover_image_id: null };
-          sb.from(kind === "lore" ? "lore_entries" : "people").update(patch).eq("id", target.id).then(function (res) {
+          sb.from(kind === "lore" ? "lore_entries" : "people").update(patch, { returning: "minimal" }).eq("id", target.id).then(function (res) {
             if (res.error) { msg.textContent = "The cover could not be removed."; return; }
             target.coverUrl = null; target.coverPath = null; target.coverImageId = null;
             render();
@@ -1046,7 +1046,7 @@
               zoom: Number(scope.querySelector("[data-figzm]").value), offset_x: figure ? figure.offX : 0, offset_y: figure ? figure.offY : 0,
               image_key: imageKey
             };
-            var op = figure ? sb.from("lore_figures").update(row).eq("id", figure.id) : sb.from("lore_figures").insert(row);
+            var op = figure ? sb.from("lore_figures").update(row, { returning: "minimal" }).eq("id", figure.id) : sb.from("lore_figures").insert(row, { returning: "minimal" });
             op.then(function (res) {
               if (res.error) { if (path && !figure) removeStorageObject(path); msg.textContent = "The figure could not be saved."; return; }
               loadLive();
@@ -1054,7 +1054,7 @@
           }
           if (file) {
             uploadToStorage(file, "covers", e.key).then(function (up) {
-              sb.from("content_images").insert({ filename: file.name, storage_path: up.path, image_url: up.url, used_in: "lore:" + e.id }).then(function (res) {
+              sb.from("content_images").insert({ filename: file.name, storage_path: up.path, image_url: up.url, used_in: "lore:" + e.id }, { returning: "minimal" }).then(function (res) {
                 if (res.error) { removeStorageObject(up.path); msg.textContent = "The library row could not be saved, so the uploaded file was removed."; return; }
                 saveFig(up.url, up.path, null);
               }, function () { removeStorageObject(up.path); msg.textContent = "The library row could not be saved."; });
@@ -1086,7 +1086,7 @@
         for (var j = 0; j < dels.length; j++) dels[j].addEventListener("click", function () {
           var fid2 = Number(this.getAttribute("data-figdel"));
           if (!sb) return;
-          sb.from("lore_figures").delete().eq("id", fid2).then(function () { loadLive(); });
+          sb.from("lore_figures").delete({ returning: "minimal" }).eq("id", fid2).then(function () { loadLive(); });
         });
       }
       function renderWiki(main) {
@@ -1332,15 +1332,15 @@
             if (pw.length < 4) { state.gmError = "Use at least four characters, so a stray tap cannot set it by accident."; renderGmSignIn(main); renderFooterOnly(main); return; }
             if (pw !== pw2) { state.gmError = "The two entries do not match. Try again."; renderGmSignIn(main); renderFooterOnly(main); return; }
             sha256Hex(pw).then(function (hex) {
-              sb.from("settings").upsert({ key: "gm_passcode_hash", value: hex }).then(function (res) {
-                if (res.error) { state.gmError = "The passcode could not be saved. Live sync is not connected."; renderGmSignIn(main); renderFooterOnly(main); return; }
+              sb.from("settings").upsert({ key: "gm_passcode_hash", value: hex }, { returning: "minimal" }).then(function (res) {
+                if (res.error) { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); return; }
                 state.gmPasscodeState = "set";
                 gmFetch(pw).then(function (data) {
                   applyGmPayload(data && data.match ? data : { chronicle: [], people: [], secrets: [], notes: [], review_items: [], lore: [] });
                   gmPasscodeMem = pw; gmSetSession();
                   state.gmError = ""; state.view = "gm"; render(); window.scrollTo(0, 0);
                 });
-              }, function () { state.gmError = "The passcode could not be saved. Live sync is not connected."; renderGmSignIn(main); renderFooterOnly(main); });
+              }, function () { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); });
             });
             return;
           }
@@ -1463,7 +1463,7 @@
         });
         function decide(id, status) {
           if (!sb) return;
-          sb.from("review_items").update({ status: status }).eq("id", id).then(function (res) {
+          sb.from("review_items").update({ status: status }, { returning: "minimal" }).eq("id", id).then(function (res) {
             if (res.error) return;
             GM.review = GM.review.filter(function (r) { return r.id !== id; });
             render();
@@ -1484,7 +1484,7 @@
           FIGURES.forEach(function (f) { if (f.imageUrl && row && f.imageUrl === row.image_url) used = true; });
           if (used) { if (msg) msg.textContent = "That image is in use, so it stays until it is removed from where it is used."; return; }
           if (!sb || !row) return;
-          sb.from("content_images").delete().eq("id", id).then(function (r2) {
+          sb.from("content_images").delete({ returning: "minimal" }).eq("id", id).then(function (r2) {
             if (r2.error) { if (msg) msg.textContent = "The image could not be deleted."; return; }
             removeStorageObject(row.storage_path).then(function () { loadLive(); });
           });
@@ -1497,7 +1497,7 @@
           if (!sb) { msg.textContent = "Live sync is not connected, so the image cannot be uploaded."; return; }
           msg.textContent = "Uploading.";
           uploadToStorage(file, "covers", file.name.replace(/\.[a-z0-9]+$/i, "")).then(function (u) {
-            sb.from("content_images").insert({ filename: file.name, storage_path: u.path, image_url: u.url, used_in: null }).then(function (r2) {
+            sb.from("content_images").insert({ filename: file.name, storage_path: u.path, image_url: u.url, used_in: null }, { returning: "minimal" }).then(function (r2) {
               if (r2.error) { removeStorageObject(u.path); msg.textContent = "The library row could not be saved, so the uploaded file was removed."; return; }
               loadLive();
             }, function () { removeStorageObject(u.path); msg.textContent = "The library row could not be saved."; });
@@ -1510,7 +1510,7 @@
         var yes = document.getElementById("gmResetYes");
         if (yes) yes.addEventListener("click", function () {
           if (!sb) return;
-          sb.from("settings").delete().eq("key", "gm_passcode_hash").then(function (r2) {
+          sb.from("settings").delete({ returning: "minimal" }).eq("key", "gm_passcode_hash").then(function (r2) {
             if (r2.error) { var m = document.getElementById("gmResetMsg"); if (m) m.textContent = "The passcode could not be reset. Live sync is not connected."; return; }
             gmLock();
             GM = { chronicle: [], people: [], lore: [], secrets: [], notes: [], review: [] };
@@ -1916,7 +1916,7 @@
               icon_key: document.getElementById("pinIcon").value || null, show_label: showVal,
               link_type: document.getElementById("pinLinkType").value, link_key: document.getElementById("pinLinkKey").value || null
             };
-            sb.from("map_pins").update(patch).eq("id", pin.id).then(function (res) {
+            sb.from("map_pins").update(patch, { returning: "minimal" }).eq("id", pin.id).then(function (res) {
               if (res.error) { msg.textContent = "The pin could not be saved."; return; }
               pin.label = patch.label; pin.note = patch.note; pin.iconKey = patch.icon_key; pin.showLabel = showVal; pin.linkType = patch.link_type; pin.linkKey = patch.link_key || "";
               msg.textContent = "Saved.";
@@ -1937,7 +1937,7 @@
               icon_key: document.getElementById("mkIcon").value || null, show_label: mShow,
               visibility: document.getElementById("mkVis").value
             };
-            sb.from("map_markers").update(patch).eq("id", marker.id).then(function (res) {
+            sb.from("map_markers").update(patch, { returning: "minimal" }).eq("id", marker.id).then(function (res) {
               if (res.error) { msg.textContent = "The marker could not be saved."; return; }
               marker.label = patch.label; marker.note = patch.note; marker.iconKey = patch.icon_key; marker.showLabel = mShow; marker.visibility = patch.visibility;
               msg.textContent = "Saved.";
@@ -1946,7 +1946,7 @@
           });
           document.getElementById("mkDelete").addEventListener("click", function () {
             if (!sb) return;
-            sb.from("map_markers").delete().eq("id", marker.id).then(function () {
+            sb.from("map_markers").delete({ returning: "minimal" }).eq("id", marker.id).then(function () {
               MARKERS = MARKERS.filter(function (m) { return m.id !== marker.id; });
               state.selectedMarkerId = null;
               render();
@@ -1964,7 +1964,7 @@
           var key = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
           msg.textContent = "Uploading.";
           uploadToStorage(file, "icons", key).then(function (up) {
-            sb.from("map_icons").insert({ icon_key: key, name: name, category: document.getElementById("iconCat").value, image_url: up.url, storage_path: up.path }).then(function (res) {
+            sb.from("map_icons").insert({ icon_key: key, name: name, category: document.getElementById("iconCat").value, image_url: up.url, storage_path: up.path }, { returning: "minimal" }).then(function (res) {
               if (res.error) { removeStorageObject(up.path); msg.textContent = "The icon row could not be saved, so the uploaded file was removed."; return; }
               loadLive();
             }, function () { removeStorageObject(up.path); msg.textContent = "The icon row could not be saved."; });
@@ -1985,7 +1985,7 @@
               if (res.error) { removeStorageObject(up.path); msg.textContent = "The map row could not be saved, so the uploaded file was removed."; return; }
               var newId = res.data && res.data[0] ? res.data[0].id : null;
               if (pin && newId) {
-                sb.from("map_pins").update({ link_type: "map", link_key: "custom-" + newId }).eq("id", pin.id).then(function () { loadLive(); });
+                sb.from("map_pins").update({ link_type: "map", link_key: "custom-" + newId }, { returning: "minimal" }).eq("id", pin.id).then(function () { loadLive(); });
               } else loadLive();
             }, function () { removeStorageObject(up.path); msg.textContent = "The map row could not be saved."; });
           }, function () { msg.textContent = "The upload failed, and nothing was saved."; });
@@ -2004,11 +2004,11 @@
           var existing = null;
           MARKERS.forEach(function (m) { if (m.mapKey === state.mapKey && m.kind === "party") existing = m; });
           var row = { map: state.mapKey, kind: "party", x: px, y: py, label: existing ? existing.label : "The Party", note: existing ? existing.note : "", icon_key: "party-token", show_label: true, visibility: "player", hex_q: hq, hex_r: hr };
-          var op = existing ? sb.from("map_markers").update(row).eq("id", existing.id) : sb.from("map_markers").insert(row);
+          var op = existing ? sb.from("map_markers").update(row, { returning: "minimal" }).eq("id", existing.id) : sb.from("map_markers").insert(row, { returning: "minimal" });
           op.then(function (res) { if (!res.error) { state.mapToolMode = null; loadLive(); } });
         } else if (mode === "marker") {
           var row2 = { map: state.mapKey, kind: "other", x: px, y: py, label: "New marker", note: "", icon_key: null, show_label: true, visibility: "player", hex_q: hq, hex_r: hr };
-          sb.from("map_markers").insert(row2).then(function (res) { if (!res.error) { state.mapToolMode = null; loadLive(); } });
+          sb.from("map_markers").insert(row2, { returning: "minimal" }).then(function (res) { if (!res.error) { state.mapToolMode = null; loadLive(); } });
         }
       }
       function renderMaps(main) {
