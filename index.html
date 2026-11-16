@@ -1332,15 +1332,25 @@
             if (pw.length < 4) { state.gmError = "Use at least four characters, so a stray tap cannot set it by accident."; renderGmSignIn(main); renderFooterOnly(main); return; }
             if (pw !== pw2) { state.gmError = "The two entries do not match. Try again."; renderGmSignIn(main); renderFooterOnly(main); return; }
             sha256Hex(pw).then(function (hex) {
-              sb.from("settings").upsert({ key: "gm_passcode_hash", value: hex }, { returning: "minimal" }).then(function (res) {
-                if (res.error) { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); return; }
+              function saveFailed() { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); }
+              function saveSucceeded() {
                 state.gmPasscodeState = "set";
                 gmFetch(pw).then(function (data) {
                   applyGmPayload(data && data.match ? data : { chronicle: [], people: [], secrets: [], notes: [], review_items: [], lore: [] });
                   gmPasscodeMem = pw; gmSetSession();
                   state.gmError = ""; state.view = "gm"; render(); window.scrollTo(0, 0);
                 });
-              }, function () { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); });
+              }
+              function tryUpdate() {
+                sb.from("settings").update({ value: hex }, { returning: "minimal" }).eq("key", "gm_passcode_hash").then(function (res2) {
+                  if (res2.error) { saveFailed(); return; }
+                  saveSucceeded();
+                }, function () { saveFailed(); });
+              }
+              sb.from("settings").insert({ key: "gm_passcode_hash", value: hex }, { returning: "minimal" }).then(function (res) {
+                if (res.error) { tryUpdate(); return; }
+                saveSucceeded();
+              }, function () { tryUpdate(); });
             });
             return;
           }
