@@ -2726,8 +2726,8 @@
 
         var panel = document.getElementById("pinPanel");
         var mPanel = document.getElementById("markerPanel");
-        var visiblePins = state.showPins ? pins : [];
-        stage = createStage(document.getElementById("mapFrame"), mapDef, visiblePins, {
+        var stagePins = state.showPins ? pins : [];
+        stage = createStage(document.getElementById("mapFrame"), mapDef, stagePins, {
           getSelectedId: function () { return state.selectedPinId; },
           getSelectedMarkerId: function () { return state.selectedMarkerId; },
           getShowLabels: function () { return state.showLabels; },
