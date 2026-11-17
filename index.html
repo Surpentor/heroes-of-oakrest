@@ -376,6 +376,20 @@
       .lib-cell.sel { outline: 2px solid var(--teal); }
       .lib-cell span { overflow-wrap: break-word; }
 
+      /* Player submissions */
+      .sub-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+      .sub-preview-item { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); padding: 0.375rem; }
+      .sub-preview-item img { display: block; width: 100%; height: 5rem; object-fit: cover; border-radius: 4px; background: #ece5cd; }
+      .sub-preview-item span { display: block; margin-top: 0.25rem; font-size: 0.7rem; line-height: 1.3; color: var(--dim); overflow-wrap: break-word; }
+      .sub-preview-item button { position: absolute; top: 0.5rem; right: 0.5rem; min-height: 1.75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 0.7rem; font-weight: 700; padding: 0.125rem 0.5rem; cursor: pointer; }
+      .sub-success { margin-top: 1rem; border: 1px solid var(--teal); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
+      .sub-fallback { margin-top: 1rem; border: 1px solid var(--gold); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
+      .review-imgs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.625rem; }
+      .review-imgs a { display: block; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+      .review-imgs img { display: block; width: 8rem; height: 6rem; object-fit: cover; }
+      .sub-about { display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--gold); border-radius: 999px; background: var(--surface); padding: 0.25rem 0.375rem 0.25rem 0.75rem; font-size: 0.8125rem; font-weight: 600; }
+      .sub-about button { border: 1px solid var(--border); border-radius: 999px; background: var(--surface-alt); color: var(--text); font: inherit; font-size: 0.75rem; font-weight: 700; min-height: 1.75rem; padding: 0.125rem 0.5rem; cursor: pointer; }
+
       /* New Player Primer */
       .primer-lead { border: 1px solid var(--gold); border-radius: var(--radius); background: var(--surface); padding: 1rem 1.125rem; margin-top: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
       .primer-lead p { margin: 0; font-size: 15px; line-height: 1.65; }
@@ -461,6 +475,8 @@
         "primer.intro": "For a player joining the Heroes of Oakrest mid-campaign: the world of Caldaryn, its gods and peoples, the places on the party\u2019s road, and the story so far. Everything here is what the party itself knows, in the open. Nothing on this page needs the GM passcode, and nothing here spoils what the party has not yet learned.",
         "primer.start": "Read this page first, top to bottom. Then read the Chronicle, which tells the story as it happened. After that, wander: every name on this page that has a button leads to its fuller entry, and the sections below end with a short guide to what each part of this site is for.",
         "maps.intro": "Drag to pan. Zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: right-click the map (long-press on touch) and pick an icon by name to drop it, drag pins and markers to move them, right-click any item for rename, lock, hide, and delete options, and press Delete to remove the selected item.",
+        "submit.title": "Submit a Change or a Picture",
+        "submit.intro": "Spot something missing, wrong, or out of date? Found a picture that belongs on a page, or lived a moment the Chronicle missed? Send it here. Every submission goes to the GM's review queue first — nothing changes on the site until the GM approves it, and approved pictures join the site's image library.",
         "footer.sync": SYNC_SUMMARY
       };
       // Header kicker: shows the current in-world day, derived from the
@@ -781,7 +797,9 @@
         mapMsg: "",
         deleteArmedKey: null,
         mapViews: {},
-        addHidden: false
+        addHidden: false,
+        submitPrefill: null,
+        mySubmissions: []
       };
 
       // ---------- GM gate (server-side, through the get_gm_content RPC) ----------
@@ -960,7 +978,8 @@
         { key: "timeline", label: "Timeline" },
         { key: "people", label: "People" },
         { key: "maps", label: "Maps" },
-        { key: "mysteries", label: "Mysteries" }
+        { key: "mysteries", label: "Mysteries" },
+        { key: "submit", label: "Submit" }
       ];
       function renderNav() {
         var nav = document.getElementById("topnav");
@@ -1016,6 +1035,7 @@
         else if (state.view === "people") renderPeople(main);
         else if (state.view === "maps") renderMaps(main);
         else if (state.view === "mysteries") renderMysteries(main);
+        else if (state.view === "submit") renderSubmit(main);
         else if (state.view === "gmsignin") renderGmSignIn(main);
         else if (state.view === "gm") renderGm(main);
         var foot = document.createElement("footer");
@@ -1413,7 +1433,8 @@
           + '<hr class="rule">'
           + (c ? framedImgHtml(c, "reader-img", e.title) : "")
           + articleBodyHtml(e)
-          + (e.sourceUrl ? '<p style="margin-top:1rem"><a href="' + esc(e.sourceUrl) + '" target="_blank" rel="noreferrer" style="font-size:0.875rem;color:var(--teal)">WorldAnvil article</a></p>' : "");
+          + (e.sourceUrl ? '<p style="margin-top:1rem"><a href="' + esc(e.sourceUrl) + '" target="_blank" rel="noreferrer" style="font-size:0.875rem;color:var(--teal)">WorldAnvil article</a></p>' : "")
+          + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change to this article</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Submit a picture for this article</button></div>';
         if (gmIsUnlocked()) {
           if (canEditText()) html += contentTextSectionHtml("lore", e);
           html += coverControlHtml("lore", e);
@@ -1426,6 +1447,7 @@
         html += "</article>";
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
+        wireSuggestButtons(main);
         if (gmIsUnlocked()) {
           wireContentTextSections(main);
           wireCoverControl(main, "lore", e);
@@ -1555,6 +1577,7 @@
           + syncNoticeHtml()
           + '<p style="margin-top:1rem;text-align:center" class="small muted">'
           + allLore.length + " articles \u00B7 " + visiblePeople().length + " people \u00B7 " + visiblePins().length + " map pins \u00B7 " + visibleChronicle().length + " chronicle entries</p>"
+          + '<p style="margin-top:0.5rem;text-align:center"><button type="button" class="ghost-btn" data-suggest data-suggest-section="general" data-suggest-key="" data-suggest-label="" data-suggest-type="addition">Spot something missing or wrong? Submit a change or a picture</button></p>'
           + '<label style="display:block;margin-top:0.75rem"><span class="sr-only">Search the wiki, people, and map pins</span>'
           + '<input type="search" id="wikiSearch" class="search-input" placeholder="Search articles, people, and map pins\u2026" value="' + esc(state.wikiQ) + '"></label>';
         if (q && pinHits.length > 0) {
@@ -1613,6 +1636,7 @@
           }
         });
         wireCards(main);
+        wireSuggestButtons(main);
         decorateSiteText(main);
       }
 
@@ -1852,11 +1876,14 @@
         entries.forEach(function (e) {
           var isGm = !!e.gmOnly;
           var focus = state.chronicleFocus && state.chronicleFocus === e.key;
-          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + textEditBtnHtml("chronicle", e.id) + "</li>";
+          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + textEditBtnHtml("chronicle", e.id)
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button></div>' + "</li>";
         });
-        html += "</ol></div>";
+        html += "</ol>"
+          + '<div style="margin-top:1.5rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1rem"><p style="margin:0"><strong>Missing a moment?</strong></p><p class="small muted" style="margin:0.25rem 0 0">If something happened on the road that the Chronicle does not tell yet, send it in.</p><button type="button" class="btn btn-teal" data-suggest data-suggest-section="chronicle" data-suggest-key="" data-suggest-label="" data-suggest-type="addition" style="margin-top:0.625rem">Submit a Chronicle moment</button></div></div>';
         main.innerHTML = html;
         wireTextEditButtons(main);
+        wireSuggestButtons(main);
         if (state.chronicleFocus) {
           var target = main.querySelector('[data-chron="' + state.chronicleFocus + '"]');
           state.chronicleFocus = null;
@@ -2069,7 +2096,8 @@
           + '<p class="small muted" style="margin:0">' + kindLabel + " \u00B7 " + esc(p.status) + "</p>"
           + (p.gmOnly ? '<p style="margin:0.5rem 0 0"><span class="gm-badge">GM only</span></p>' : "")
           + '<hr class="rule">'
-          + bodyHtml(p.description);
+          + bodyHtml(p.description)
+          + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="update">Suggest a change to this entry</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="picture">Submit a portrait or picture</button></div>';
         if (gmIsUnlocked()) {
           if (canEditText()) html += contentTextSectionHtml("person", p);
           html += coverControlHtml("person", p);
@@ -2077,6 +2105,7 @@
         html += "</article>";
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
+        wireSuggestButtons(main);
         if (gmIsUnlocked()) { wireContentTextSections(main); wireCoverControl(main, "person", p); }
         decorateSiteText(main);
       }
@@ -2255,7 +2284,8 @@
       function renderGm(main) {
         if (!gmIsUnlocked()) { renderGmSignIn(main); return; }
         var siteChanges = GM.review.filter(function (r) { return r.kind === "site_text"; });
-        var openReview = GM.review.filter(function (r) { return r.kind !== "site_text"; });
+        var playerSubs = GM.review.filter(function (r) { return r.kind === "player_submission" || String(r.kind || "").indexOf("player_") === 0; });
+        var openReview = GM.review.filter(function (r) { return r.kind !== "site_text" && r.kind !== "player_submission" && String(r.kind || "").indexOf("player_") !== 0; });
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title">GM <span class="gm-badge">GM only</span></h2>'
           + '<div class="gm-note-box"><p style="margin:0"><strong>Read this first: what this gate is.</strong></p>'
           + '<p style="margin:0.5rem 0 0">This gate is now a real server-side gate. GM content is never in this page file and is never sent to the browser until the passcode checks out on the server, through the get_gm_content check. While signed out, this page holds no GM secrets, no GM chronicle entries, no GM people, and no review items, in what it shows or in its source. The payload is kept in memory only for this sitting, and signing out or closing the tab clears it.</p></div>';
@@ -2291,6 +2321,14 @@
           html += '<article class="thread-card"><h4>' + esc(n.title) + "</h4>" + bodyHtml(n.body) + textEditBtnHtml("note", n.id) + "</article>";
         });
         html += "</div>";
+        html += '<section aria-label="Player submissions" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Player Submissions <span class="small" style="font-weight:400;color:var(--dim)">(' + playerSubs.length + ' waiting)</span></h3>'
+          + '<p class="small muted" style="margin-top:0.25rem">Additions, updates, corrections, and pictures sent in from the Submit page. Nothing a player submits is live yet: resolving marks it accepted so you can make the change (or place the picture) yourself; dismissing marks it dismissed. Pictures are shown below each submission and open full-size on a tap.</p><div class="stack" style="margin-top:0.75rem">';
+        if (playerSubs.length === 0) html += '<p class="small muted">No player submissions are waiting.</p>';
+        playerSubs.forEach(function (r) {
+          html += '<article class="thread-card"><p class="small" style="margin:0 0 0.25rem"><span class="status-pill">Player submission</span> <span class="muted">' + esc(r.kind) + '</span></p><h4>' + esc(r.title) + "</h4>" + bodyHtml(r.body) + reviewImagesHtml(r.body)
+            + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" data-review-resolve="' + r.id + '">Resolve</button><button type="button" class="btn btn-outline" data-review-dismiss="' + r.id + '">Dismiss</button></div></article>';
+        });
+        html += "</div></section>";
         html += '<section aria-label="Review queue" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Review Queue</h3>'
           + '<p class="small muted" style="margin-top:0.25rem">Open contradictions and questions held for Mike\u2019s ruling. Resolving marks an item accepted; dismissing marks it dismissed. Decided items leave this list.</p><div class="stack" style="margin-top:0.75rem">';
         if (openReview.length === 0) html += '<p class="small muted">The queue is empty.</p>';
@@ -2423,20 +2461,326 @@
         var done = DATA.threads.filter(function (t) { return t.status === "resolved"; });
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
         open.forEach(function (t) {
-          html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id) + "</article>";
+          html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button></div></article>';
         });
         html += "</div>";
         if (!threadsTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">Threads could not be loaded. Live sync is not connected. Try again.</p>';
         if (done.length > 0) {
           html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)" data-st="mysteries.settled">' + esc(stVal("mysteries.settled", "Settled")) + '</h3><div class="stack" style="margin-top:0.75rem">';
           done.forEach(function (t) {
-            html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id) + "</article>";
+            html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
+              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button></div></article>';
           });
           html += "</div>";
         }
-        html += "</div>";
+        html += '<div style="margin-top:1.5rem"><button type="button" class="btn btn-teal" data-suggest data-suggest-section="mysteries" data-suggest-key="" data-suggest-label="" data-suggest-type="addition">Submit a new mystery or thread</button></div></div>';
         main.innerHTML = html;
         wireTextEditButtons(main);
+        wireSuggestButtons(main);
+        decorateSiteText(main);
+      }
+    </script>
+
+    <script>
+      "use strict";
+      // ---------- Player submissions ----------
+      // Players (no passcode needed) send additions, updates, corrections,
+      // and pictures to the GM. A submission is a row in review_items with
+      // kind "player_submission" and status "pending": it is not live
+      // content, it only reaches the GM, through the get_gm_content
+      // payload, where it appears in the Player Submissions section of
+      // the GM view with Resolve and Dismiss. Pictures are uploaded to
+      // the same content-images storage bucket the GM tools use, in the
+      // submissions folder, and their links ride inside the submission
+      // text, so the GM can open, save, and place them. If live sync
+      // refuses the send (or is not connected), the player is never told
+      // it worked: they get the submission as text they can copy or
+      // download and hand to the GM another way, pictures listed by name
+      // to send alongside.
+      var SUBMIT_TYPES = [
+        ["addition", "Addition \u2014 something new for the site"],
+        ["update", "Update or correction \u2014 something there is missing, wrong, or out of date"],
+        ["picture", "Picture \u2014 artwork, a photo, or a screenshot for a page"],
+        ["map", "Map \u2014 a new pin, a moved pin, or a place that is missing"],
+        ["other", "Other"]
+      ];
+      var SUBMIT_SECTIONS = [
+        ["general", "Anywhere / not sure"],
+        ["wiki", "Wiki article"],
+        ["people", "Person"],
+        ["chronicle", "Chronicle"],
+        ["timeline", "Timeline"],
+        ["maps", "Map or place on a map"],
+        ["mysteries", "Mystery or thread"],
+        ["primer", "New Player Primer"]
+      ];
+      function submitTypeLabel(value) {
+        for (var i = 0; i < SUBMIT_TYPES.length; i++) if (SUBMIT_TYPES[i][0] === value) return SUBMIT_TYPES[i][1];
+        return value || "";
+      }
+      function submitSectionLabel(value) {
+        for (var i = 0; i < SUBMIT_SECTIONS.length; i++) if (SUBMIT_SECTIONS[i][0] === value) return SUBMIT_SECTIONS[i][1];
+        return value || "";
+      }
+      function submitTargetsFor(section) {
+        if (section === "wiki") return visibleLore().map(function (l) { return { key: l.key, label: l.title }; });
+        if (section === "people") return visiblePeople().map(function (p) { return { key: p.key, label: p.name }; });
+        if (section === "chronicle") return visibleChronicle().map(function (e) { return { key: e.key, label: (e.date ? e.date + " \u2014 " : "") + e.title }; });
+        if (section === "mysteries") return DATA.threads.map(function (t) { return { key: "thread-" + t.id, label: t.title }; });
+        if (section === "maps") return visiblePins().map(function (p) { return { key: "pin-" + p.id, label: (MAPS[p.mapKey] ? MAPS[p.mapKey].title + ": " : "") + p.label }; });
+        return [];
+      }
+      function submitTargetLabel(section, key, fallback) {
+        var list = submitTargetsFor(section);
+        for (var i = 0; i < list.length; i++) if (list[i].key === key) return list[i].label;
+        return fallback || "";
+      }
+      function openSubmit(prefill) {
+        state.submitPrefill = prefill || null;
+        state.submitDone = null;
+        state.view = "submit";
+        state.reader = null;
+        render();
+        window.scrollTo(0, 0);
+      }
+      function wireSuggestButtons(root) {
+        if (!root) return;
+        var btns = root.querySelectorAll("[data-suggest]");
+        for (var i = 0; i < btns.length; i++) {
+          (function (btn) {
+            if (btn.getAttribute("data-suggest-wired")) return;
+            btn.setAttribute("data-suggest-wired", "1");
+            btn.addEventListener("click", function (ev) {
+              ev.preventDefault(); ev.stopPropagation();
+              openSubmit({
+                section: btn.getAttribute("data-suggest-section") || "general",
+                key: btn.getAttribute("data-suggest-key") || "",
+                label: btn.getAttribute("data-suggest-label") || "",
+                type: btn.getAttribute("data-suggest-type") || "addition"
+              });
+            });
+          })(btns[i]);
+        }
+      }
+      function playerSubmitInsert(title, body, relatedKey) {
+        if (!sb) return Promise.resolve(false);
+        return sb.from("review_items").insert({ kind: "player_submission", title: title, body: body, question: title, source_note: body, status: "pending", related_key: relatedKey || null }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
+      }
+      function reviewImageUrls(body) {
+        var urls = [], seen = {};
+        var re = /https?:\/\/[^\s<)"']+/g, m;
+        var text = String(body || "");
+        while ((m = re.exec(text)) !== null) {
+          var u = m[0].replace(/[.,;]+$/, "");
+          if ((/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(u) || u.indexOf("content-images") !== -1) && !seen[u]) { seen[u] = true; urls.push(u); }
+        }
+        return urls;
+      }
+      function reviewImagesHtml(body) {
+        var urls = reviewImageUrls(body);
+        if (urls.length === 0) return "";
+        var html = '<div class="review-imgs">';
+        urls.forEach(function (u) { html += '<a href="' + esc(u) + '" target="_blank" rel="noreferrer"><img src="' + esc(u) + '" alt="Submitted picture" loading="lazy"></a>'; });
+        return html + "</div>";
+      }
+      function downloadSubmissionText(filename, text) {
+        var blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+      }
+      function renderSubmit(main) {
+        var prefill = state.submitPrefill || {};
+        var startSection = prefill.section || "general";
+        var startType = prefill.type || "addition";
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="submit.title">' + esc(siteText("submit.title")) + "</h2>"
+          + '<p class="small muted" style="margin-top:0.25rem" data-st="submit.intro">' + esc(siteText("submit.intro")) + "</p>"
+          + syncNoticeHtml();
+        if (state.submitDone) {
+          var d = state.submitDone;
+          html += '<div class="sub-success" role="status"><p style="margin:0"><strong>Sent to the GM.</strong></p>'
+            + '<p class="small" style="margin:0.375rem 0 0">\u201C' + esc(d.subject) + "\u201D is in the review queue"
+            + (d.images > 0 ? ", with " + d.images + (d.images === 1 ? " picture" : " pictures") : "")
+            + ". It will appear on the site once the GM has approved it and placed it.</p>"
+            + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="subAnother">Submit another</button><button type="button" class="btn btn-outline" id="subGoWiki">Back to the Wiki</button></div></div>';
+        }
+        html += '<form id="subForm" style="margin-top:1.25rem" novalidate>'
+          + '<section style="border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1rem">'
+          + '<h3 class="font-display" style="margin:0;font-size:1.125rem;font-weight:600">What are you sending?</h3>'
+          + (prefill.label ? '<p style="margin:0.625rem 0 0"><span class="sub-about">About: ' + esc(prefill.label) + ' <button type="button" id="subClearAbout">Clear</button></span></p>' : "")
+          + '<label class="gm-field"><span>Your name, or your character\u2019s name</span><input type="text" id="subName" class="search-input" autocomplete="name" placeholder="e.g. Paige, playing Buddy"></label>'
+          + '<label class="gm-field"><span>Kind of submission</span><select id="subType" class="search-input">'
+          + SUBMIT_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (startType === t[0] ? " selected" : "") + ">" + esc(t[1]) + "</option>"; }).join("")
+          + "</select></label>"
+          + '<label class="gm-field"><span>Which part of the site?</span><select id="subSection" class="search-input">'
+          + SUBMIT_SECTIONS.map(function (s) { return '<option value="' + s[0] + '"' + (startSection === s[0] ? " selected" : "") + ">" + esc(s[1]) + "</option>"; }).join("")
+          + "</select></label>"
+          + '<label class="gm-field"><span>Which entry is it about? <span class="muted" style="font-weight:400">(if one)</span></span><select id="subRelated" class="search-input"></select></label>'
+          + '<label class="gm-field"><span>Subject</span><input type="text" id="subSubject" class="search-input" placeholder="e.g. Buddy\u2019s portrait, or: the Squatting Duck has a cellar"></label>'
+          + '<label class="gm-field"><span>The details</span><textarea id="subDetails" class="search-input" rows="9" placeholder="For an addition: the new text, as it should read. For an update: what is there now, and what it should say instead. For a picture: what it shows and where it belongs."></textarea></label>'
+          + "</section>"
+          + '<section style="border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1rem;margin-top:0.75rem">'
+          + '<h3 class="font-display" style="margin:0;font-size:1.125rem;font-weight:600">Pictures</h3>'
+          + '<p class="small muted" style="margin:0.25rem 0 0">Attach up to four pictures: character art, a screenshot, a map sketch, a photo of your notes. They are sent with the submission for the GM to place.</p>'
+          + '<label class="gm-field"><span>Add pictures</span><input type="file" id="subFiles" class="search-input" accept="image/*" multiple></label>'
+          + '<div class="sub-previews" id="subPreviews"></div>'
+          + '<label class="gm-field"><span>Caption for the pictures <span class="muted" style="font-weight:400">(if any)</span></span><input type="text" id="subCaption" class="search-input" placeholder="e.g. Buddy at the Ashen Hollows, by Paige"></label>'
+          + "</section>"
+          + '<p class="small" id="subMsg" role="status" style="margin:0.75rem 0 0"></p>'
+          + '<div style="margin-top:0.75rem"><button type="submit" class="btn btn-deep" id="subSend">Send to the GM for review</button></div>'
+          + '<div id="subResult"></div>'
+          + "</form>";
+        if (state.mySubmissions && state.mySubmissions.length > 0) {
+          html += '<section aria-label="Your submissions this session" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Your submissions this sitting</h3><div class="stack" style="margin-top:0.75rem">';
+          state.mySubmissions.forEach(function (s) {
+            html += '<article class="thread-card"><p class="small" style="margin:0 0 0.25rem"><span class="status-pill">' + (s.status === "sent" ? "Sent to the GM" : "Not sent \u2014 kept as a copy") + '</span> <span class="muted">' + esc(s.when) + '</span></p><h4>' + esc(s.subject) + '</h4><p class="small muted" style="margin:0">' + esc(s.type) + (s.images > 0 ? " \u00B7 " + s.images + (s.images === 1 ? " picture" : " pictures") : "") + "</p></article>";
+          });
+          html += "</div></section>";
+        }
+        html += "</div>";
+        main.innerHTML = html;
+
+        var pendingFiles = [];
+        var relatedSel = document.getElementById("subRelated");
+        var sectionSel = document.getElementById("subSection");
+        function relatedOptionsHtml(section, selectedKey) {
+          var list = submitTargetsFor(section);
+          var out = '<option value="">Nothing specific</option>';
+          var found = false;
+          list.forEach(function (t) {
+            if (t.key === selectedKey) found = true;
+            out += '<option value="' + esc(t.key) + '"' + (t.key === selectedKey ? " selected" : "") + ">" + esc(t.label) + "</option>";
+          });
+          if (selectedKey && !found) out += '<option value="' + esc(selectedKey) + '" selected>' + esc((state.submitPrefill && state.submitPrefill.label) || selectedKey) + "</option>";
+          return out;
+        }
+        relatedSel.innerHTML = relatedOptionsHtml(startSection, prefill.key || "");
+        sectionSel.addEventListener("change", function () {
+          relatedSel.innerHTML = relatedOptionsHtml(this.value, "");
+        });
+        var clearBtn = document.getElementById("subClearAbout");
+        if (clearBtn) clearBtn.addEventListener("click", function () {
+          state.submitPrefill = null;
+          var chip = this.parentNode; if (chip && chip.parentNode) chip.parentNode.remove();
+          sectionSel.value = "general";
+          relatedSel.innerHTML = relatedOptionsHtml("general", "");
+        });
+        var previews = document.getElementById("subPreviews");
+        function renderPreviews() {
+          if (pendingFiles.length === 0) { previews.innerHTML = ""; return; }
+          var out = "";
+          pendingFiles.forEach(function (f, idx) {
+            out += '<div class="sub-preview-item"><img src="' + f.url + '" alt=""><span>' + esc(f.file.name) + '</span><button type="button" data-subremove="' + idx + '">Remove</button></div>';
+          });
+          previews.innerHTML = out;
+          var rms = previews.querySelectorAll("[data-subremove]");
+          for (var i = 0; i < rms.length; i++) rms[i].addEventListener("click", function () {
+            var idx = Number(this.getAttribute("data-subremove"));
+            var gone = pendingFiles.splice(idx, 1)[0];
+            if (gone) { try { URL.revokeObjectURL(gone.url); } catch (e) { /* already gone */ } }
+            renderPreviews();
+          });
+        }
+        document.getElementById("subFiles").addEventListener("change", function () {
+          var files = this.files || [];
+          for (var i = 0; i < files.length; i++) {
+            if (pendingFiles.length >= 4) break;
+            pendingFiles.push({ file: files[i], url: URL.createObjectURL(files[i]) });
+          }
+          this.value = "";
+          renderPreviews();
+        });
+        var another = document.getElementById("subAnother");
+        if (another) another.addEventListener("click", function () { state.submitDone = null; state.submitPrefill = null; render(); window.scrollTo(0, 0); });
+        var goWiki = document.getElementById("subGoWiki");
+        if (goWiki) goWiki.addEventListener("click", function () { state.submitDone = null; state.view = "wiki"; render(); window.scrollTo(0, 0); });
+
+        document.getElementById("subForm").addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          var msg = document.getElementById("subMsg");
+          var result = document.getElementById("subResult");
+          var sendBtn = document.getElementById("subSend");
+          var name = document.getElementById("subName").value.trim();
+          var type = document.getElementById("subType").value;
+          var section = sectionSel.value;
+          var relatedKey = relatedSel.value || "";
+          var relatedLabel = relatedKey ? submitTargetLabel(section, relatedKey, (state.submitPrefill && state.submitPrefill.key === relatedKey) ? state.submitPrefill.label : relatedKey) : "";
+          var subject = document.getElementById("subSubject").value.trim();
+          var details = document.getElementById("subDetails").value.trim();
+          var caption = document.getElementById("subCaption").value.trim();
+          result.innerHTML = "";
+          if (!name) { msg.textContent = "Add your name or your character\u2019s name, so the GM knows who sent it."; document.getElementById("subName").focus(); return; }
+          if (!subject) { msg.textContent = "Give the submission a subject."; document.getElementById("subSubject").focus(); return; }
+          if (!details && pendingFiles.length === 0) { msg.textContent = "Write the details, or attach a picture: the GM needs something to work from."; document.getElementById("subDetails").focus(); return; }
+          sendBtn.disabled = true;
+          msg.textContent = pendingFiles.length > 0 ? "Uploading your pictures\u2026" : "Sending\u2026";
+          var uploaded = [];
+          var uploadFailed = null;
+          var chain = Promise.resolve();
+          pendingFiles.forEach(function (f) {
+            chain = chain.then(function () {
+              if (uploadFailed) return null;
+              return uploadToStorage(f.file, "submissions", name + "-" + subject).then(function (up) {
+                uploaded.push({ name: f.file.name, url: up.url });
+              }, function () { uploadFailed = f.file.name; });
+            });
+          });
+          chain.then(function () {
+            var lines = [];
+            lines.push("Submitted by: " + name);
+            lines.push("Kind: " + submitTypeLabel(type));
+            lines.push("Part of the site: " + submitSectionLabel(section));
+            if (relatedLabel) lines.push("About: " + relatedLabel + (relatedKey ? " (" + relatedKey + ")" : ""));
+            lines.push("");
+            lines.push(details || "(No written details \u2014 picture submission.)");
+            if (caption) { lines.push(""); lines.push("Picture caption: " + caption); }
+            if (uploaded.length > 0) {
+              lines.push("");
+              lines.push("Pictures:");
+              uploaded.forEach(function (u) { lines.push("- " + u.name + ": " + u.url); });
+            }
+            var body = lines.join("\n");
+            var title = submitTypeLabel(type).split(" \u2014")[0] + ": " + subject + " \u2014 from " + name;
+            function showFallback(reason) {
+              sendBtn.disabled = false;
+              msg.textContent = "";
+              var packet = "Submission for the Heroes of Oakrest site\n" + title + "\n\n" + body;
+              if (pendingFiles.length > 0 && uploaded.length < pendingFiles.length) {
+                packet += "\n\nPictures to send with this text: " + pendingFiles.map(function (f) { return f.file.name; }).join(", ");
+              }
+              state.mySubmissions.unshift({ subject: subject, type: submitTypeLabel(type), status: "copy", images: pendingFiles.length, when: new Date().toLocaleString() });
+              result.innerHTML = '<div class="sub-fallback" role="status"><p style="margin:0"><strong>It could not be sent from here.</strong></p>'
+                + '<p class="small" style="margin:0.375rem 0 0">' + esc(reason) + " Your submission is written out below instead: copy it or download it and hand it to the GM (in Discord, say), with the picture files themselves if you attached any. Nothing was lost and nothing was posted to the site.</p>"
+                + '<label class="gm-field"><span>Your submission</span><textarea id="subPacket" class="search-input" rows="10" readonly>' + esc(packet) + "</textarea></label>"
+                + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="subCopy">Copy the submission</button><button type="button" class="btn btn-outline" id="subDownload">Download it as a file</button></div>'
+                + '<p class="small" id="subCopyMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
+              result.scrollIntoView({ block: "nearest" });
+              document.getElementById("subCopy").addEventListener("click", function () {
+                var ta = document.getElementById("subPacket");
+                var cm = document.getElementById("subCopyMsg");
+                function done() { cm.textContent = "Copied. Paste it wherever you reach the GM."; }
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); cm.textContent = "The text is selected: copy it with your keyboard."; });
+                else { ta.select(); cm.textContent = "The text is selected: copy it with your keyboard."; }
+              });
+              document.getElementById("subDownload").addEventListener("click", function () {
+                downloadSubmissionText("oakrest-submission-" + subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) + ".txt", packet);
+              });
+            }
+            if (uploadFailed) { showFallback("The picture \u201C" + uploadFailed + "\u201D could not be uploaded, so the submission was not sent half-finished."); return; }
+            msg.textContent = "Sending\u2026";
+            playerSubmitInsert(title, body, relatedKey || section).then(function (ok) {
+              if (!ok) { showFallback("Live sync refused the send, or is not connected right now."); return; }
+              state.mySubmissions.unshift({ subject: subject, type: submitTypeLabel(type), status: "sent", images: uploaded.length, when: new Date().toLocaleString() });
+              state.submitDone = { subject: subject, images: uploaded.length };
+              state.submitPrefill = null;
+              render();
+              window.scrollTo(0, 0);
+            });
+          });
+        });
         decorateSiteText(main);
       }
     </script>
@@ -2923,6 +3267,7 @@
         if (!article && fallback) html += '<button type="button" class="btn btn-teal" id="pinOpenFallback">Open article: ' + esc(fallback.title) + "</button>";
         if (person) html += '<button type="button" class="btn btn-outline" id="pinOpenPerson">Its people</button>';
         html += '<button type="button" class="btn btn-outline" id="pinZoom">Zoom to pin</button>';
+        html += '<button type="button" class="btn btn-outline" id="pinSuggest">Suggest a change</button>';
         if (canEditText()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit text</button>';
         html += "</div></section>";
         container.innerHTML = html;
@@ -2943,6 +3288,9 @@
         });
         document.getElementById("pinZoom").addEventListener("click", function () {
           if (stage) stage.zoomToPoint(pin.x, pin.y);
+        });
+        document.getElementById("pinSuggest").addEventListener("click", function () {
+          openSubmit({ section: "maps", key: "pin-" + pin.id, label: (MAPS[pin.mapKey] ? MAPS[pin.mapKey].title + ": " : "") + pin.label, type: "update" });
         });
         var pinEdit = document.getElementById("pinEditText");
         if (pinEdit) pinEdit.addEventListener("click", function () { openRenameDialog("pin", pin.id); });
@@ -2965,6 +3313,7 @@
           + (article ? '<button type="button" class="btn btn-teal" id="markerOpenArticle">Open article</button>' : "")
           + (linkMap ? '<button type="button" class="btn btn-deep" id="markerOpenMap">Open map: ' + esc(linkMap.title) + "</button>" : "")
           + '<button type="button" class="btn btn-outline" id="markerZoom">Zoom to marker</button>'
+          + '<button type="button" class="btn btn-outline" id="markerSuggest">Suggest a change</button>'
           + (canEditText() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit text</button>' : "")
           + "</div></section>";
         container.innerHTML = html;
@@ -2981,6 +3330,9 @@
         });
         document.getElementById("markerZoom").addEventListener("click", function () {
           if (stage) stage.zoomToPoint(m.x, m.y);
+        });
+        document.getElementById("markerSuggest").addEventListener("click", function () {
+          openSubmit({ section: "maps", key: "marker-" + m.id, label: name, type: "update" });
         });
         var markerEdit = document.getElementById("markerEditText");
         if (markerEdit) markerEdit.addEventListener("click", function () { openRenameDialog("marker", m.id); });
