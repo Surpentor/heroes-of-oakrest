@@ -357,9 +357,11 @@
       .icon-lib { margin-top: 0.75rem; border: 1px solid var(--gold); border-radius: var(--radius); background: var(--surface); padding: 0.75rem; }
       .icon-lib .icon-lib-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
       .icon-lib .icon-grid { max-height: 15rem; overflow-y: auto; padding-right: 0.25rem; }
-      .icon-lib .icon-cell { cursor: grab; user-select: none; -webkit-user-select: none; }
+      .icon-lib .icon-cell { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; }
       .icon-lib .icon-cell:active { cursor: grabbing; }
       .icon-lib .icon-cell:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+      .icon-drag-ghost { position: fixed; z-index: 120; width: 3rem; height: 3rem; transform: translate(-50%, -50%); pointer-events: none; background: #ece5cd; border: 1px solid var(--border); border-radius: 4px; padding: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.55); }
+      .icon-drag-ghost img { width: 100%; height: 100%; object-fit: contain; display: block; }
       .map-ctx .ctx-search { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); padding: 0.5rem; font: inherit; font-size: 0.875rem; margin: 0.25rem 0; min-height: 2.25rem; }
       .map-ctx .ctx-group, .icon-name-list .ctx-group { padding: 0.375rem 0.5rem 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gold); margin: 0; }
       .icon-name-list { display: grid; gap: 0.25rem; max-height: 46dvh; overflow-y: auto; margin-top: 0.5rem; }
@@ -950,6 +952,12 @@
         Promise.all(jobs).then(function () {
           parseExtras();
           dataLoaded = true;
+          // A live reload that lands while the reader is on a map must
+          // not throw away the zoom and pan they are using: preserve the
+          // current map view across this render, the same as an in-place
+          // map edit does. (Fresh navigation to a map still starts
+          // fitted; this only covers reloads of the map already shown.)
+          if (state.view === "maps") state.keepMapView = true;
           syncConnected = loreTableOk || peopleTableOk || chronicleTableOk || pinsTableOk || threadsTableOk || mapsTableOk;
           if (state.mapKey && !MAPS[state.mapKey]) {
             var keys = Object.keys(MAPS);
@@ -3309,6 +3317,7 @@
           fit: fit,
           zoomToPoint: zoomToPoint,
           refreshPins: buildPins,
+          toMapCoords: toMapCoords,
           getView: function () { return { s: scale, x: tx, y: ty }; },
           restoreView: function (v) { if (!v) return; userMoved = true; restoredView = { s: v.s, x: v.x, y: v.y }; applyView(v.s, v.x, v.y); }
         };
@@ -3509,7 +3518,7 @@
 
       function wireMapTools(main) {
         var snap = document.getElementById("toolSnap");
-        if (snap) snap.addEventListener("click", function () { state.snapHex = state.snapHex === false ? true : false; render(); });
+        if (snap) snap.addEventListener("click", function () { state.snapHex = state.snapHex === false ? true : false; renderPreservingMapView(); });
         var iconBtn = document.getElementById("iconUpload");
         if (iconBtn) iconBtn.addEventListener("click", function () {
           var msg = document.getElementById("iconMsg");
@@ -3544,7 +3553,7 @@
             DATA.pins.push(np);
             DATA.pins.sort(function (a, b) { return a.number - b.number; });
             state.mapToolMode = null; state.selectedPinId = np.id; state.selectedMarkerId = null;
-            render();
+            renderPreservingMapView();
           });
         } else if (mode === "location" || mode === "token") {
           var mkRow = { map: state.mapKey, kind: mode, x: px, y: py, label: mode === "location" ? "New location" : "New token", note: "", icon_key: null, show_label: true, visibility: "player", hex_q: hq, hex_r: hr };
@@ -3553,7 +3562,7 @@
             var nm = mapMarkerRow(res.data[0]);
             MARKERS.push(nm);
             state.mapToolMode = null; state.selectedMarkerId = nm.id; state.selectedPinId = null;
-            render();
+            renderPreservingMapView();
           });
         } else if (mode === "party") {
           var existing = null;
@@ -3689,7 +3698,7 @@
           if (res.error) { setMapMsg("The visibility change could not be saved."); return; }
           item.visibility = hide ? "gm" : "player";
           setMapMsg(hide ? "Hidden from players. Only you can see it now; reveal it any time from its menu or editor." : "Revealed. Players can see it now.");
-          render();
+          renderPreservingMapView();
         });
       }
       function deleteMapItem(kind, id) {
@@ -3710,7 +3719,7 @@
           if (state.selectedMarkerId === id) state.selectedMarkerId = null;
           state.deleteArmedKey = null;
           setMapMsg("Deleted.");
-          render();
+          renderPreservingMapView();
         });
       }
       function duplicateMapItem(kind, id) {
@@ -3730,7 +3739,7 @@
             if (sz != null) { MAP_EXTRAS.sizes["pin-" + np.id] = sz; saveExtras("sizes"); }
             state.selectedPinId = np.id; state.selectedMarkerId = null;
             setMapMsg("Copied as pin " + np.number + ". Drag it where you want it.");
-            render();
+            renderPreservingMapView();
           });
         } else {
           var mrow = { map: item.mapKey, kind: item.kind, x: nx, y: ny, label: item.label, note: item.note, icon_key: item.iconKey, show_label: item.showLabel, visibility: item.visibility, hex_q: item.hexQ, hex_r: item.hexR };
@@ -3745,7 +3754,7 @@
             if (sz2 != null) { MAP_EXTRAS.sizes["marker-" + nm.id] = sz2; saveExtras("sizes"); }
             state.selectedMarkerId = nm.id; state.selectedPinId = null;
             setMapMsg("Copied. Drag it where you want it.");
-            render();
+            renderPreservingMapView();
           });
         }
       }
@@ -3781,7 +3790,7 @@
             item.note = patch.note;
             wrap.remove();
             setMapMsg("Saved.");
-            render();
+            renderPreservingMapView();
           });
         });
       }
@@ -3839,7 +3848,7 @@
             item.iconKey = val;
             wrap.remove();
             setMapMsg("Icon saved.");
-            render();
+            renderPreservingMapView();
           });
         });
       }
@@ -3853,12 +3862,12 @@
           DATA.pins.forEach(function (p) { if (p.mapKey === state.mapKey && p.number > maxNum) maxNum = p.number; });
           var pinRow = { map: state.mapKey, x: pos.x, y: pos.y, label: labelText || "New pin", note: "", icon_key: iconKey || null, show_label: true, visibility: vis, status: "approved", number: maxNum + 1, link_type: "none", link_key: null };
           sb.from("map_pins").insert(pinRow).select("id,map,x,y,label,note,icon_key,show_label,visibility,status,number,link_type,link_key").then(function (res) {
-            if (res.error || !res.data || !res.data[0]) { setMapMsg("The pin could not be added."); loadLive(); return; }
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("The pin could not be added" + (res.error && res.error.message ? ": " + res.error.message : ".") + " Nothing was placed; try again."); return; }
             var np = mapPinRow(res.data[0]);
             DATA.pins.push(np);
             state.selectedPinId = np.id; state.selectedMarkerId = null;
             setMapMsg("Pin " + np.number + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
-            render();
+            renderPreservingMapView();
           });
         } else {
           var kind = mode === "location" || mode === "token" || mode === "party" ? mode : "other";
@@ -3866,12 +3875,12 @@
           if (labelText && kind !== "party") label = labelText;
           var mkRow = { map: state.mapKey, kind: kind, x: pos.x, y: pos.y, label: label, note: "", icon_key: iconKey || (kind === "party" ? "party-token" : null), show_label: true, visibility: vis, hex_q: pos.q, hex_r: pos.r };
           sb.from("map_markers").insert(mkRow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
-            if (res.error || !res.data || !res.data[0]) { setMapMsg("That item could not be added."); loadLive(); return; }
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("That icon could not be added" + (res.error && res.error.message ? ": " + res.error.message : ".") + " Nothing was placed; try again."); return; }
             var nm = mapMarkerRow(res.data[0]);
             MARKERS.push(nm);
             state.selectedMarkerId = nm.id; state.selectedPinId = null;
             setMapMsg(label + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
-            render();
+            renderPreservingMapView();
           });
         }
       }
@@ -4010,7 +4019,7 @@
         var jobs = [];
         visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey && p.visibility === "gm") { jobs.push(sb.from("map_pins").update({ visibility: "player" }, { returning: "minimal" }).eq("id", p.id)); p.visibility = "player"; } });
         visibleMarkers(state.mapKey).forEach(function (m) { if (m.visibility === "gm") { jobs.push(sb.from("map_markers").update({ visibility: "player" }, { returning: "minimal" }).eq("id", m.id)); m.visibility = "player"; } });
-        Promise.all(jobs).then(function () { setMapMsg("Everything on this map is visible to players now."); render(); });
+        Promise.all(jobs).then(function () { setMapMsg("Everything on this map is visible to players now."); renderPreservingMapView(); });
       }
       function iconLibraryHtml() {
         var html = '<section class="icon-lib" aria-label="Icon library">'
@@ -4053,6 +4062,9 @@
           if (key) setMapMsg((iconName(key) || "Icon") + " armed. Tap the map where it belongs.");
         }
         var cells = main.querySelectorAll("[data-iconcell]");
+        // Timestamp of the last pointer-drag that ended on an icon cell:
+        // the click that follows a drag must not also arm the icon.
+        var lastPtrDrag = { key: null, t: 0 };
         for (var c = 0; c < cells.length; c++) {
           (function (cell) {
             var key = cell.getAttribute("data-iconcell");
@@ -4067,7 +4079,67 @@
               } catch (err) { /* drag data unavailable; tap-to-place still works */ }
             });
             cell.addEventListener("dragend", function () { state.dragIconKey = null; });
-            cell.addEventListener("click", function () { setArmed(state.pendingIconKey === key ? null : key); });
+            // Pointer-based drag, alongside the native HTML5 drag above.
+            // Native drag-and-drop never fires at all on touch, and is
+            // silently cancelled in some browsers and webviews, which is
+            // why dragging an icon onto the map could do nothing at all.
+            // This path works with mouse, pen, and touch alike: press an
+            // icon, move onto the map, release, and the label dialog
+            // opens for that spot.
+            cell.addEventListener("pointerdown", function (e) {
+              if (e.pointerType === "mouse" && e.button !== 0) return;
+              var pid = e.pointerId;
+              var startX = e.clientX, startY = e.clientY;
+              var dragging = false, ghost = null;
+              var frameEl = document.getElementById("mapFrame");
+              function mv(ev) {
+                if (ev.pointerId !== pid) return;
+                if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+                if (!dragging) {
+                  dragging = true;
+                  state.dragIconKey = key;
+                  ghost = document.createElement("div");
+                  ghost.className = "icon-drag-ghost";
+                  var img = cell.querySelector("img");
+                  if (img) ghost.appendChild(img.cloneNode(false));
+                  document.body.appendChild(ghost);
+                }
+                if (ev.cancelable) ev.preventDefault();
+                ghost.style.left = ev.clientX + "px";
+                ghost.style.top = ev.clientY + "px";
+                if (frameEl) {
+                  var r = frameEl.getBoundingClientRect();
+                  frameEl.classList.toggle("drop-ready", ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
+                }
+              }
+              function up(ev) {
+                window.removeEventListener("pointermove", mv, true);
+                window.removeEventListener("pointerup", up, true);
+                window.removeEventListener("pointercancel", up, true);
+                if (ghost) { ghost.remove(); ghost = null; }
+                if (frameEl) frameEl.classList.remove("drop-ready");
+                if (!dragging) return;
+                dragging = false;
+                state.dragIconKey = null;
+                lastPtrDrag = { key: key, t: Date.now() };
+                // A native HTML5 drop for this same gesture opens the
+                // dialog itself; do not open a second one over it.
+                if (document.getElementById("mapDialog")) return;
+                if (!frameEl || !stage || !stage.toMapCoords) return;
+                var r = frameEl.getBoundingClientRect();
+                if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
+                var pt = stage.toMapCoords(ev.clientX, ev.clientY);
+                state.pendingIconKey = null;
+                openLabelDialogForCreate(pt.x, pt.y, "token", key);
+              }
+              window.addEventListener("pointermove", mv, true);
+              window.addEventListener("pointerup", up, true);
+              window.addEventListener("pointercancel", up, true);
+            });
+            cell.addEventListener("click", function () {
+              if (lastPtrDrag.key === key && Date.now() - lastPtrDrag.t < 500) return;
+              setArmed(state.pendingIconKey === key ? null : key);
+            });
             cell.addEventListener("keydown", function (e) {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setArmed(state.pendingIconKey === key ? null : key); }
             });
@@ -4228,7 +4300,7 @@
           var prev = state.mapStack[state.mapStack.length - 1];
           if (prev) { state.mapStack = state.mapStack.slice(0, -1); state.mapKey = prev; state.selectedPinId = null; state.selectedMarkerId = null; render(); window.scrollTo(0, 0); }
         });
-        document.getElementById("togglePins").addEventListener("click", function () { state.showPins = !state.showPins; render(); });
+        document.getElementById("togglePins").addEventListener("click", function () { state.showPins = !state.showPins; renderPreservingMapView(); });
         document.getElementById("toggleLabels").addEventListener("click", function () {
           state.showLabels = !state.showLabels;
           this.textContent = state.showLabels ? "Hide labels" : "Show labels";
