@@ -800,6 +800,7 @@
         mapMsg: "",
         deleteArmedKey: null,
         mapViews: {},
+        keepMapView: false,
         addHidden: false,
         submitPrefill: null,
         mySubmissions: []
@@ -1099,6 +1100,7 @@
       }
       function render() {
         state.sizePreview = {};
+        if (state.view !== "maps") state.keepMapView = false;
         renderHeaderText();
         renderNav();
         var main = document.getElementById("main");
@@ -3270,6 +3272,16 @@
           zoomAt(fs.w / 2, fs.h / 2, ns / scale);
         });
         if (img.complete && img.naturalWidth > 0) { aspect = img.naturalHeight / img.naturalWidth; }
+        // A view preserved across an in-place edit (locking or unlocking
+        // an item, for example) is restored instead of the fit, so the
+        // reader stays at the zoom and pan they were using. Fresh visits
+        // to a map still start fitted: keepMapView is only set by those
+        // in-place edits, is consumed here, and is cleared on navigation.
+        var restoredView = null;
+        if (state.keepMapView && opts.mapKey && state.mapViews && state.mapViews[opts.mapKey]) {
+          restoredView = { s: state.mapViews[opts.mapKey].s, x: state.mapViews[opts.mapKey].x, y: state.mapViews[opts.mapKey].y };
+        }
+        state.keepMapView = false;
         img.addEventListener("load", function () {
           if (img.naturalWidth > 0) {
             aspect = img.naturalHeight / img.naturalWidth;
@@ -3277,24 +3289,35 @@
             // image aspect once it is known. A view left over from earlier
             // panning or zooming is never restored over the fit, and a
             // view the reader has already chosen is never overridden.
-            if (!userMoved) fit();
+            // A deliberately preserved view is re-applied with the true
+            // aspect instead of being fitted away.
+            if (restoredView) applyView(restoredView.s, restoredView.x, restoredView.y);
+            else if (!userMoved) fit();
           }
         });
         buildPins();
-        // Start fitted, every time the map is shown. (An explicit jump to
-        // a pin, via zoomToPoint from a pin link or the pin list, still
-        // applies after this and is not overridden.)
-        fit();
+        if (restoredView) {
+          userMoved = true;
+          applyView(restoredView.s, restoredView.x, restoredView.y);
+        } else {
+          // Start fitted, every time the map is shown. (An explicit jump to
+          // a pin, via zoomToPoint from a pin link or the pin list, still
+          // applies after this and is not overridden.)
+          fit();
+        }
         return {
           fit: fit,
           zoomToPoint: zoomToPoint,
-          refreshPins: buildPins
+          refreshPins: buildPins,
+          getView: function () { return { s: scale, x: tx, y: ty }; },
+          restoreView: function (v) { if (!v) return; userMoved = true; restoredView = { s: v.s, x: v.x, y: v.y }; applyView(v.s, v.x, v.y); }
         };
       }
 
       // ---------- Maps view ----------
       function goMap(k) {
         if (k !== state.mapKey) state.mapStack.push(state.mapKey);
+        state.keepMapView = false;
         state.mapKey = k;
         state.selectedPinId = null;
         state.selectedMarkerId = null;
@@ -3619,18 +3642,42 @@
         menu.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeMapCtx(); });
       }
 
+      // In-place refresh: rebuilds only the pin layer, the pin/marker
+      // panels, and the pin list's Locked/Hidden tags. The stage itself
+      // (and its zoom/pan) is left untouched, so using it for lock and
+      // unlock never zooms the map back out the way a full render() did:
+      // render() recreates the stage, and a new stage always starts
+      // fitted. If there is no live stage, fall back to a render that
+      // preserves the saved view for this map.
       function refreshMapView() {
         if (stage) stage.refreshPins();
         var panel = document.getElementById("pinPanel");
         var mPanel = document.getElementById("markerPanel");
         if (panel) renderPinPanel(panel);
         if (mPanel) renderMarkerPanel(mPanel);
+        var listBtns = document.querySelectorAll("[data-pinlist]");
+        for (var i = 0; i < listBtns.length; i++) {
+          (function (btn) {
+            var pid = Number(btn.getAttribute("data-pinlist"));
+            var pin = null;
+            for (var j = 0; j < DATA.pins.length; j++) if (DATA.pins[j].id === pid) pin = DATA.pins[j];
+            if (!pin) return;
+            btn.innerHTML = '<span class="num">' + pin.number + '.</span> <span style="font-weight:500">' + esc(pin.label) + "</span>"
+              + (pin.visibility === "gm" ? ' <span class="hidden-tag">Hidden</span>' : "")
+              + (gmIsUnlocked() && isLocked("pin", pin.id) ? ' <span class="hidden-tag" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span>' : "")
+              + (pin.note ? '<span class="note">' + esc(pin.note) + "</span>" : "");
+          })(listBtns[i]);
+        }
+      }
+      function renderPreservingMapView() {
+        if (state.view === "maps") state.keepMapView = true;
+        render();
       }
       function toggleItemLock(kind, id) {
         var now = !isLocked(kind, id);
         setLocked(kind, id, now).then(function (ok) {
           setMapMsg(ok ? (now ? "Locked. It cannot be dragged or deleted until it is unlocked." : "Unlocked. It can be dragged again.") : "The lock change could not be saved.");
-          render();
+          if (stage) refreshMapView(); else renderPreservingMapView();
         });
       }
       function toggleItemHidden(kind, id) {
@@ -3923,7 +3970,7 @@
         visibleMarkers(state.mapKey).forEach(function (m) { MAP_EXTRAS.locks["marker-" + m.id] = locked ? true : false; });
         saveExtras("locks").then(function (ok) {
           setMapMsg(ok ? (locked ? "Everything on this map is locked." : "Everything on this map is unlocked.") : "The lock change could not be saved.");
-          render();
+          if (stage) refreshMapView(); else renderPreservingMapView();
         });
       }
       document.addEventListener("keydown", function (e) {
