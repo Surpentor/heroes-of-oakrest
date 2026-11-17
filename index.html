@@ -315,6 +315,32 @@
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: reduce) { .map-pin, .pin-head, .pin-ring { animation: none; } }
     
+      /* Map editing: context menu, locks, drag and drop */
+      .map-ctx { position: fixed; z-index: 90; min-width: 13.5rem; max-width: min(19rem, calc(100vw - 1rem)); max-height: min(70dvh, 30rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 28px rgba(34,29,19,0.35); padding: 0.375rem; }
+      .map-ctx .ctx-head { padding: 0.375rem 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
+      .map-ctx button.ctx-item { display: flex; width: 100%; align-items: center; gap: 0.5rem; border: 0; background: none; color: var(--text); text-align: left; border-radius: 4px; padding: 0.5rem; font: inherit; font-size: 0.875rem; cursor: pointer; min-height: 2.25rem; }
+      .map-ctx button.ctx-item:hover, .map-ctx button.ctx-item:focus-visible { background: var(--surface-alt); }
+      .map-ctx button.ctx-item.danger { color: var(--danger); font-weight: 600; }
+      .map-ctx button.ctx-item:disabled { opacity: 0.45; cursor: not-allowed; }
+      .map-ctx .ctx-sep { border: 0; border-top: 1px solid var(--border); margin: 0.375rem 0; }
+      .map-ctx .ctx-note { padding: 0.25rem 0.5rem 0.5rem; font-size: 0.75rem; color: var(--dim); line-height: 1.45; }
+      .pin-lock { position: absolute; top: -7px; left: -7px; z-index: 4; display: flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid #fff; background: #221d13; color: #fbf7ec; font-size: 10px; line-height: 1; pointer-events: none; }
+      .map-pin.draggable { cursor: grab; }
+      .map-pin.draggable:active { cursor: grabbing; }
+      .map-pin.is-locked { cursor: pointer; }
+      .map-frame.drop-ready { outline: 3px dashed var(--teal); outline-offset: -3px; }
+      .icon-cell[draggable="true"] { cursor: grab; }
+      .icon-cell[draggable="true"]:active { cursor: grabbing; }
+      .icon-cell.armed { outline: 2px solid var(--teal); background: var(--surface-alt); }
+      .map-dialog-backdrop { position: fixed; inset: 0; z-index: 95; background: rgba(34,29,19,0.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+      .map-dialog { width: min(26rem, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; box-shadow: 0 10px 32px rgba(34,29,19,0.4); }
+      .map-dialog h3 { font-family: var(--font-display); font-size: 1.125rem; margin: 0; }
+      .map-status { margin-top: 0.75rem; border: 1px solid var(--teal); border-radius: var(--radius); background: var(--surface); padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+      .map-status:empty { display: none; }
+      .map-pin.is-hidden { opacity: 0.55; outline: 2px dashed var(--danger); outline-offset: 2px; }
+      .pin-hidden-tag { position: absolute; top: -9px; right: -14px; z-index: 4; border-radius: 999px; border: 1px solid #fff; background: var(--danger); color: #fff; padding: 0 5px; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.5; pointer-events: none; }
+      .pin-list .hidden-tag { display: inline-block; border-radius: 999px; background: var(--danger); color: #fff; padding: 0 0.45rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
+
       .st-editable { outline: 2px solid var(--gold); outline-offset: 2px; cursor: pointer; }
       .img-ctrl { border: 1px dashed var(--gold); border-radius: var(--radius); background: var(--surface); padding: 0.75rem; margin-top: 1rem; }
       .frame-box { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); height: 12rem; background: var(--surface-alt); }
@@ -373,7 +399,7 @@
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
         "timeline.intro": "The whole road in order, oldest first: the deep history of Caldaryn, from the Shaping of the Peaks through the Eclipse at year 0, and on to the days of 101 AE. Moments drawn from the Chronicle link back to their entries.",
-        "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it.",
+        "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: drag pins and markers to move them, drag icons from the library onto the map to drop them, right-click the map or any item for add, rename, lock, and delete options, and press Delete to remove the selected item.",
         "footer.sync": SYNC_SUMMARY
       };
       // Header kicker: shows the current in-world day, derived from the
@@ -532,10 +558,10 @@
       // map_pins and map_markers have no size or link columns, so these live
       // as JSON in the site_text table (publicly readable, GM-writable by
       // upsert, the same store the site wording editor uses).
-      var MAP_EXTRAS = { sizes: {}, links: {}, compass: {} };
+      var MAP_EXTRAS = { sizes: {}, links: {}, compass: {}, locks: {} };
       function parseExtras() {
-        MAP_EXTRAS = { sizes: {}, links: {}, compass: {} };
-        [["map_item_sizes", "sizes"], ["map_marker_links", "links"], ["map_compass", "compass"]].forEach(function (pair) {
+        MAP_EXTRAS = { sizes: {}, links: {}, compass: {}, locks: {} };
+        [["map_item_sizes", "sizes"], ["map_marker_links", "links"], ["map_compass", "compass"], ["map_item_locks", "locks"]].forEach(function (pair) {
           var raw = SITE_TEXT[pair[0]];
           if (!raw) return;
           try { var v = JSON.parse(raw); if (v && typeof v === "object") MAP_EXTRAS[pair[1]] = v; } catch (e) { /* keep defaults */ }
@@ -543,9 +569,15 @@
       }
       function saveExtras(kind, key) {
         if (!sb || !gmIsUnlocked()) return Promise.resolve(false);
-        var storeKey = kind === "sizes" ? "map_item_sizes" : kind === "links" ? "map_marker_links" : "map_compass";
+        var storeKey = kind === "sizes" ? "map_item_sizes" : kind === "links" ? "map_marker_links" : kind === "locks" ? "map_item_locks" : "map_compass";
         SITE_TEXT[storeKey] = JSON.stringify(MAP_EXTRAS[kind]);
         return sb.from("site_text").upsert({ text_key: storeKey, value: SITE_TEXT[storeKey], updated_by: "gm" }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
+      }
+      function isLocked(kind, id) { return MAP_EXTRAS.locks[kind + "-" + id] === true; }
+      function setLocked(kind, id, locked) {
+        if (locked) MAP_EXTRAS.locks[kind + "-" + id] = true;
+        else delete MAP_EXTRAS.locks[kind + "-" + id];
+        return saveExtras("locks");
       }
       function itemSize(kind, id) {
         var key = kind + "-" + id;
@@ -665,7 +697,10 @@
         siteEditMode: false,
         mapToolMode: null,
         toolPinId: null,
-        sizePreview: {}
+        sizePreview: {},
+        pendingIconKey: null,
+        mapMsg: "",
+        deleteArmedKey: null
       };
 
       // ---------- GM gate (server-side, through the get_gm_content RPC) ----------
@@ -2055,10 +2090,14 @@
             var isSel = opts.getSelectedId() === p.id;
             var labelOn = opts.getShowLabels() && p.showLabel && (p.label || "").trim().length > 0;
             var sz = itemSize("pin", p.id);
+            var pLocked = opts.isItemLocked ? opts.isItemLocked("pin", p.id) : false;
+            var pHidden = p.visibility === "gm";
+            var pBadges = (pLocked ? '<span class="pin-lock" aria-hidden="true">&#128274;</span>' : "") + (pHidden ? '<span class="pin-hidden-tag">Hidden</span>' : "");
+            var pStateCls = (pLocked ? " is-locked" : "") + (pHidden ? " is-hidden" : "") + ((opts.canDragPins && !pLocked) ? " draggable" : "");
             if (art) {
               html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-pinwrap="' + p.id + '" data-size="' + sz + '" style="left:' + p.x + "%;top:" + p.y + '%">'
-                + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + '" style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms">'
-                + '<img src="' + art + '" alt="">' + '<span class="badge">' + p.number + "</span>"
+                + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '" style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms">'
+                + '<img src="' + art + '" alt="">' + '<span class="badge">' + p.number + "</span>" + pBadges
                 + "</button>"
                 + (labelOn ? '<span class="map-label' + (p.x > 76 ? " flip" : "") + '">' + esc(p.label) + "</span>" : "")
                 + "</div>";
@@ -2066,9 +2105,9 @@
               var pending = p.status === "pending";
               var delay = (i * 130) + "ms";
               html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-pinwrap="' + p.id + '" data-anchor="bottom" data-size="' + sz + '" style="left:' + p.x + "%;top:" + p.y + '%">'
-                + '<button type="button" class="map-pin diamond' + (isSel ? " selected" : "") + (pending ? " pending" : "") + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pending ? " (awaiting GM approval)" : "") + '" style="animation-delay:' + delay + '">'
+                + '<button type="button" class="map-pin diamond' + (isSel ? " selected" : "") + (pending ? " pending" : "") + pStateCls + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pending ? " (awaiting GM approval)" : "") + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '" style="animation-delay:' + delay + '">'
                 + '<span class="pin-top"><span class="pin-ring" style="animation-delay:' + delay + '"></span><span class="pin-head" style="animation-delay:' + delay + '"><span class="pin-num">' + p.number + "</span></span></span>"
-                + '<span class="pin-stem"></span>'
+                + '<span class="pin-stem"></span>' + pBadges
                 + (labelOn ? '<span class="pin-tip">' + esc(p.label) + "</span>" : "")
                 + "</button></div>";
             }
@@ -2080,9 +2119,13 @@
             var isSel = opts.getSelectedMarkerId && opts.getSelectedMarkerId() === m.id;
             var labelOn = opts.getShowLabels() && m.showLabel && (m.label || "").trim().length > 0;
             var name = m.kind === "party" ? (m.label || "The Party") : (m.label || "Marker");
+            var mLocked = opts.isItemLocked ? opts.isItemLocked("marker", m.id) : false;
+            var mHidden = m.visibility === "gm";
+            var mBadges = (mLocked ? '<span class="pin-lock" aria-hidden="true">&#128274;</span>' : "") + (mHidden ? '<span class="pin-hidden-tag">Hidden</span>' : "");
+            var mStateCls = (mLocked ? " is-locked" : "") + (mHidden ? " is-hidden" : "") + ((opts.canDragMarkers && !mLocked) ? " draggable" : "");
             html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-markerwrap="' + m.id + '" data-size="' + itemSize("marker", m.id) + '" style="left:' + m.x + "%;top:" + m.y + '%">'
-              + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + '">'
-              + (art ? '<img src="' + art + '" alt="">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022"))
+              + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
+              + (art ? '<img src="' + art + '" alt="">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
               + "</button>"
               + (labelOn ? '<span class="map-label' + (m.x > 76 ? " flip" : "") + '">' + esc(m.label) + "</span>" : "")
               + "</div>";
@@ -2106,7 +2149,12 @@
             btns[j].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
             btns[j].addEventListener("click", function (ev) {
               ev.stopPropagation();
+              if (dragSuppressed("pin-" + this.getAttribute("data-pin"))) return;
               opts.onSelectPin(Number(this.getAttribute("data-pin")));
+            });
+            btns[j].addEventListener("contextmenu", function (ev) {
+              ev.preventDefault(); ev.stopPropagation();
+              if (opts.onContextItem) opts.onContextItem("pin", Number(this.getAttribute("data-pin")), ev.clientX, ev.clientY);
             });
           }
           var mbtns = layer.querySelectorAll("[data-marker]");
@@ -2117,14 +2165,27 @@
               if (dragSuppressed("marker-" + this.getAttribute("data-marker"))) return;
               if (opts.onSelectMarker) opts.onSelectMarker(Number(this.getAttribute("data-marker")));
             });
+            mbtns[k].addEventListener("contextmenu", function (ev) {
+              ev.preventDefault(); ev.stopPropagation();
+              if (opts.onContextItem) opts.onContextItem("marker", Number(this.getAttribute("data-marker")), ev.clientX, ev.clientY);
+            });
+          }
+          if (opts.canDragPins && opts.onMovePin) {
+            var pinDragBtns = layer.querySelectorAll("[data-pin]");
+            for (var pd = 0; pd < pinDragBtns.length; pd++) {
+              (function (btn) {
+                var pid = Number(btn.getAttribute("data-pin"));
+                if (opts.isItemLocked && opts.isItemLocked("pin", pid)) return;
+                attachDrag(btn, btn.closest(".pin-wrap"), "pin-" + pid, function (x, y) { opts.onMovePin(pid, x, y); });
+              })(pinDragBtns[pd]);
+            }
           }
           if (opts.canDragMarkers && opts.onMoveMarker) {
             var dragBtns = layer.querySelectorAll("[data-marker]");
             for (var d = 0; d < dragBtns.length; d++) {
               (function (btn) {
-                var kind = btn.getAttribute("data-kind");
-                if (kind !== "token" && kind !== "party") return;
                 var mid = Number(btn.getAttribute("data-marker"));
+                if (opts.isItemLocked && opts.isItemLocked("marker", mid)) return;
                 attachDrag(btn, btn.closest(".pin-wrap"), "marker-" + mid, function (x, y) { opts.onMoveMarker(mid, x, y); });
               })(dragBtns[d]);
             }
@@ -2166,6 +2227,34 @@
         }
         frame.addEventListener("pointerup", endPointer);
         frame.addEventListener("pointercancel", endPointer);
+        frame.addEventListener("contextmenu", function (e) {
+          if (e.target.closest("[data-pin],[data-marker]")) return;
+          e.preventDefault();
+          if (opts.onContextMap) {
+            var pt = toMapCoords(e.clientX, e.clientY);
+            opts.onContextMap(pt.x, pt.y, e.clientX, e.clientY);
+          }
+        });
+        frame.addEventListener("dragover", function (e) {
+          if (!opts.onDropIcon) return;
+          e.preventDefault();
+          try { e.dataTransfer.dropEffect = "copy"; } catch (err) { /* drag data unavailable */ }
+          frame.classList.add("drop-ready");
+        });
+        frame.addEventListener("dragleave", function (e) {
+          if (e.target === frame) frame.classList.remove("drop-ready");
+        });
+        frame.addEventListener("drop", function (e) {
+          frame.classList.remove("drop-ready");
+          if (!opts.onDropIcon) return;
+          e.preventDefault();
+          var iconKey = "";
+          try { iconKey = e.dataTransfer.getData("application/x-map-icon") || e.dataTransfer.getData("text/plain") || ""; } catch (err) { iconKey = ""; }
+          if (!iconKey && opts.getDragIcon) iconKey = opts.getDragIcon() || "";
+          if (!iconKey) return;
+          var pt = toMapCoords(e.clientX, e.clientY);
+          opts.onDropIcon(iconKey, pt.x, pt.y);
+        });
         frame.addEventListener("click", function (e) {
           if (e.target.closest("[data-pin],[data-marker],[data-controls],[data-compasswrap]")) return;
           var rect = frame.getBoundingClientRect();
@@ -2173,8 +2262,7 @@
             var fs = frameSize();
             var px = ((e.clientX - rect.left - tx) / scale) / Math.max(1, fs.w) * 100;
             var py = ((e.clientY - rect.top - ty) / scale) / Math.max(1, fs.w * aspect) * 100;
-            opts.onMapClick(Math.max(0, Math.min(100, px)), Math.max(0, Math.min(100, py)));
-            return;
+            if (opts.onMapClick(Math.max(0, Math.min(100, px)), Math.max(0, Math.min(100, py)))) return;
           }
           var now = Date.now();
           if (now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
@@ -2261,6 +2349,8 @@
           + '<div class="head"><h3>' + pin.number + ". " + esc(pin.label) + "</h3>"
           + '<button type="button" class="close" id="pinClose" aria-label="Close pin panel">Close</button></div>'
           + (pin.status === "pending" ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:var(--gold);color:#221d13">Awaiting GM approval</span></p>' : "")
+          + (gmIsUnlocked() && pin.visibility === "gm" ? '<p style="margin-top:0.5rem"><span class="gm-badge">Hidden from players</span></p>' : "")
+          + (gmIsUnlocked() && isLocked("pin", pin.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#221d13">Locked</span></p>' : "")
           + (pin.note ? '<div style="margin-top:0.375rem">' + bodyHtml(pin.note) + "</div>" : "")
           + '<div class="chiprow" style="margin-top:0.75rem">';
         if (targetMap) html += '<button type="button" class="btn btn-deep" id="pinOpenMap">Open map: ' + esc(targetMap.title) + "</button>";
@@ -2300,6 +2390,8 @@
           + '<div class="head"><h3>' + esc(name) + "</h3>"
           + '<button type="button" class="close" id="markerClose" aria-label="Close marker panel">Close</button></div>'
           + (m.kind === "party" && m.label && m.label !== "The Party" ? '<p class="small" style="margin-top:0.375rem;font-weight:500">' + esc(m.label) + "</p>" : "")
+          + (gmIsUnlocked() && m.visibility === "gm" ? '<p style="margin-top:0.5rem"><span class="gm-badge">Hidden from players</span></p>' : "")
+          + (gmIsUnlocked() && isLocked("marker", m.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#221d13">Locked</span></p>' : "")
           + (m.note ? '<div style="margin-top:0.375rem">' + bodyHtml(m.note) + "</div>" : "")
           + '<div class="chiprow" style="margin-top:0.75rem">'
           + (article ? '<button type="button" class="btn btn-teal" id="markerOpenArticle">Open article</button>' : "")
@@ -2382,7 +2474,7 @@
         var modeVerb = { party: "place the party marker", marker: "add a marker", pin: "drop a new numbered pin", location: "place a named location", token: "place a token" };
         var html = '<section aria-label="GM Map Tools" style="margin-top:2rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:1rem">'
           + '<h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">GM Map Tools</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Place pins, locations, and tokens, move the party marker, edit the selected item, upload custom icons, and add nested maps. Tokens and the party marker can be dragged on the map. The party marker shows for everyone on its map. Labels follow their item: clear the label text or switch it off to remove the on-map text.</p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Place pins, locations, and tokens, move the party marker, edit the selected item, upload custom icons, and add nested maps. Every unlocked pin and marker can be dragged on the map; lock an item to freeze it. Right-click the map to add items (including ones hidden from players), and right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. Set Visible to GM only to hide an item from players until you reveal it. Labels follow their item: clear the label text or switch it off to remove the on-map text.</p>'
           + '<div class="chiprow" style="margin-top:0.75rem">'
           + '<button type="button" class="ghost-btn" id="toolPin" aria-pressed="' + (state.mapToolMode === "pin") + '">Add pin (tap map)</button>'
           + '<button type="button" class="ghost-btn" id="toolLocation" aria-pressed="' + (state.mapToolMode === "location") + '">Add location (tap map)</button>'
@@ -2402,7 +2494,8 @@
             + '<label class="gm-field"><span>Visible to</span><select id="pinVis" class="search-input"><option value="player"' + (pin.visibility !== "gm" ? " selected" : "") + '>Everyone</option><option value="gm"' + (pin.visibility === "gm" ? " selected" : "") + ">GM only</option></select></label>"
             + '<label class="gm-field"><span>Status</span><select id="pinStatus" class="search-input"><option value="approved"' + (pin.status !== "pending" ? " selected" : "") + '>Approved</option><option value="pending"' + (pin.status === "pending" ? " selected" : "") + ">Awaiting GM approval</option></select></label>"
             + sizeControlHtml("pin", itemSize("pin", pin.id))
-            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="pinShowLabel" aria-pressed="' + pin.showLabel + '">Label on map: ' + (pin.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="btn btn-deep" id="pinSave">Save pin</button></div>'
+            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="pinShowLabel" aria-pressed="' + pin.showLabel + '">Label on map: ' + (pin.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="ghost-btn" id="pinLockBtn" aria-pressed="' + isLocked("pin", pin.id) + '">' + (isLocked("pin", pin.id) ? "Locked: unlock" : "Unlocked: lock") + '</button><button type="button" class="ghost-btn" id="pinHideBtn" aria-pressed="' + (pin.visibility === "gm") + '">' + (pin.visibility === "gm" ? "Hidden from players: reveal" : "Visible to players: hide") + '</button><button type="button" class="btn btn-deep" id="pinSave">Save pin</button><button type="button" class="btn btn-outline" id="pinDelete">Delete pin</button></div>'
+            + '<p class="small muted" style="margin-top:0.25rem">Drag the pin on the map to move it (while unlocked). Hiding uses the Visible to setting as well: GM only means players never see it.</p>'
             + '<p class="small" id="pinToolMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
         }
         if (marker) {
@@ -2418,7 +2511,8 @@
               : "")
             + '<label class="gm-field"><span>Visible to</span><select id="mkVis" class="search-input"><option value="player"' + (marker.visibility !== "gm" ? " selected" : "") + '>Everyone</option><option value="gm"' + (marker.visibility === "gm" ? " selected" : "") + ">GM only</option></select></label>"
             + sizeControlHtml("mk", itemSize("marker", marker.id))
-            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="mkShowLabel" aria-pressed="' + marker.showLabel + '">Label on map: ' + (marker.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="btn btn-deep" id="mkSave">Save ' + kindName.toLowerCase() + '</button><button type="button" class="btn btn-outline" id="mkDelete">Remove ' + kindName.toLowerCase() + "</button></div>"
+            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="mkShowLabel" aria-pressed="' + marker.showLabel + '">Label on map: ' + (marker.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="ghost-btn" id="mkLockBtn" aria-pressed="' + isLocked("marker", marker.id) + '">' + (isLocked("marker", marker.id) ? "Locked: unlock" : "Unlocked: lock") + '</button><button type="button" class="ghost-btn" id="mkHideBtn" aria-pressed="' + (marker.visibility === "gm") + '">' + (marker.visibility === "gm" ? "Hidden from players: reveal" : "Visible to players: hide") + '</button><button type="button" class="btn btn-deep" id="mkSave">Save ' + kindName.toLowerCase() + '</button><button type="button" class="btn btn-outline" id="mkDelete">Remove ' + kindName.toLowerCase() + "</button></div>"
+            + '<p class="small muted" style="margin-top:0.25rem">Drag it on the map to move it (while unlocked). Hiding uses the Visible to setting as well: GM only means players never see it.</p>'
             + '<p class="small" id="mkToolMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
         }
         var compassCfg = compassFor(state.mapKey);
@@ -2468,6 +2562,15 @@
             state.sizePreview["pin-" + pin.id] = f;
             if (stage) stage.refreshPins();
           });
+          var pinLockBtn = document.getElementById("pinLockBtn");
+          if (pinLockBtn) pinLockBtn.addEventListener("click", function () { toggleItemLock("pin", pin.id); });
+          var pinHideBtn = document.getElementById("pinHideBtn");
+          if (pinHideBtn) pinHideBtn.addEventListener("click", function () { toggleItemHidden("pin", pin.id); });
+          var pinDeleteBtn = document.getElementById("pinDelete");
+          if (pinDeleteBtn) pinDeleteBtn.addEventListener("click", function () {
+            if (state.deleteArmedKey === "pin-" + pin.id) { state.deleteArmedKey = null; deleteMapItem("pin", pin.id); }
+            else { state.deleteArmedKey = "pin-" + pin.id; this.textContent = "Tap again to delete for good"; }
+          });
           document.getElementById("pinSave").addEventListener("click", function () {
             var msg = document.getElementById("pinToolMsg");
             if (!sb) { msg.textContent = "Live sync is not connected."; return; }
@@ -2498,6 +2601,10 @@
             state.sizePreview["marker-" + marker.id] = f;
             if (stage) stage.refreshPins();
           });
+          var mkLockBtn = document.getElementById("mkLockBtn");
+          if (mkLockBtn) mkLockBtn.addEventListener("click", function () { toggleItemLock("marker", marker.id); });
+          var mkHideBtn = document.getElementById("mkHideBtn");
+          if (mkHideBtn) mkHideBtn.addEventListener("click", function () { toggleItemHidden("marker", marker.id); });
           document.getElementById("mkSave").addEventListener("click", function () {
             var msg = document.getElementById("mkToolMsg");
             if (!sb) { msg.textContent = "Live sync is not connected."; return; }
@@ -2527,6 +2634,7 @@
           });
           document.getElementById("mkDelete").addEventListener("click", function () {
             if (!sb) return;
+            if (isLocked("marker", marker.id)) { var mm = document.getElementById("mkToolMsg"); if (mm) mm.textContent = "That item is locked. Unlock it before removing it."; return; }
             sb.from("map_markers").delete({ returning: "minimal" }).eq("id", marker.id).then(function () {
               MARKERS = MARKERS.filter(function (m) { return m.id !== marker.id; });
               delete MAP_EXTRAS.links["marker-" + marker.id];
@@ -2645,6 +2753,320 @@
           sb.from("map_markers").insert(row2, { returning: "minimal" }).then(function (res) { if (!res.error) { state.mapToolMode = null; loadLive(); } });
         }
       }
+      // ---------- Map editing: context menus, rename, lock, hide, delete ----------
+      function mapItemByKind(kind, id) {
+        var list = kind === "pin" ? DATA.pins : MARKERS;
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        return null;
+      }
+      function setMapMsg(text) {
+        state.mapMsg = text || "";
+        var el = document.getElementById("mapStatus");
+        if (el) el.textContent = state.mapMsg;
+      }
+      function closeMapCtx() {
+        var old = document.getElementById("mapCtxMenu");
+        if (old) old.remove();
+      }
+      function openMapCtx(clientX, clientY, title, items) {
+        closeMapCtx();
+        var menu = document.createElement("div");
+        menu.className = "map-ctx";
+        menu.id = "mapCtxMenu";
+        menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-label", title);
+        var html = '<p class="ctx-head">' + esc(title) + "</p>";
+        items.forEach(function (it, idx) {
+          if (it === "sep") { html += '<hr class="ctx-sep">'; return; }
+          if (it.note) { html += '<p class="ctx-note">' + esc(it.note) + "</p>"; return; }
+          html += '<button type="button" class="ctx-item' + (it.danger ? " danger" : "") + '" data-ctx="' + idx + '"' + (it.disabled ? " disabled" : "") + ">" + esc(it.label) + "</button>";
+        });
+        menu.innerHTML = html;
+        document.body.appendChild(menu);
+        var mw = menu.offsetWidth, mh = menu.offsetHeight;
+        menu.style.left = Math.max(4, Math.min(clientX, window.innerWidth - mw - 8)) + "px";
+        menu.style.top = Math.max(4, Math.min(clientY, window.innerHeight - mh - 8)) + "px";
+        var btns = menu.querySelectorAll("[data-ctx]");
+        for (var i = 0; i < btns.length; i++) btns[i].addEventListener("click", function () {
+          var it = items[Number(this.getAttribute("data-ctx"))];
+          closeMapCtx();
+          if (it && it.action) it.action();
+        });
+        function onDocDown(ev) { if (!menu.contains(ev.target)) { closeMapCtx(); document.removeEventListener("pointerdown", onDocDown, true); } }
+        document.addEventListener("pointerdown", onDocDown, true);
+        menu.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeMapCtx(); });
+        var first = menu.querySelector("[data-ctx]:not([disabled])");
+        if (first) first.focus();
+      }
+      function refreshMapView() {
+        if (stage) stage.refreshPins();
+        var panel = document.getElementById("pinPanel");
+        var mPanel = document.getElementById("markerPanel");
+        if (panel) renderPinPanel(panel);
+        if (mPanel) renderMarkerPanel(mPanel);
+      }
+      function toggleItemLock(kind, id) {
+        var now = !isLocked(kind, id);
+        setLocked(kind, id, now).then(function (ok) {
+          setMapMsg(ok ? (now ? "Locked. It cannot be dragged or deleted until it is unlocked." : "Unlocked. It can be dragged again.") : "The lock change could not be saved.");
+          render();
+        });
+      }
+      function toggleItemHidden(kind, id) {
+        var item = mapItemByKind(kind, id);
+        if (!item || !sb) return;
+        var hide = item.visibility !== "gm";
+        var table = kind === "pin" ? "map_pins" : "map_markers";
+        sb.from(table).update({ visibility: hide ? "gm" : "player" }, { returning: "minimal" }).eq("id", id).then(function (res) {
+          if (res.error) { setMapMsg("The visibility change could not be saved."); return; }
+          item.visibility = hide ? "gm" : "player";
+          setMapMsg(hide ? "Hidden from players. Only you can see it now; reveal it any time from its menu or editor." : "Revealed. Players can see it now.");
+          render();
+        });
+      }
+      function deleteMapItem(kind, id) {
+        var item = mapItemByKind(kind, id);
+        if (!item || !sb) return;
+        if (isLocked(kind, id)) { setMapMsg("That item is locked. Unlock it before deleting it."); return; }
+        var table = kind === "pin" ? "map_pins" : "map_markers";
+        sb.from(table).delete({ returning: "minimal" }).eq("id", id).then(function (res) {
+          if (res.error) { setMapMsg("That item could not be deleted."); return; }
+          if (kind === "pin") DATA.pins = DATA.pins.filter(function (p) { return p.id !== id; });
+          else MARKERS = MARKERS.filter(function (m) { return m.id !== id; });
+          delete MAP_EXTRAS.sizes[kind + "-" + id];
+          delete MAP_EXTRAS.locks[kind + "-" + id];
+          if (kind === "marker") delete MAP_EXTRAS.links["marker-" + id];
+          saveExtras("sizes"); saveExtras("locks");
+          if (kind === "marker") saveExtras("links");
+          if (state.selectedPinId === id) state.selectedPinId = null;
+          if (state.selectedMarkerId === id) state.selectedMarkerId = null;
+          state.deleteArmedKey = null;
+          setMapMsg("Deleted.");
+          render();
+        });
+      }
+      function duplicateMapItem(kind, id) {
+        var item = mapItemByKind(kind, id);
+        if (!item || !sb) return;
+        var nx = Math.min(100, Math.round((item.x + 2) * 100) / 100), ny = Math.min(100, Math.round((item.y + 2) * 100) / 100);
+        if (kind === "pin") {
+          var maxNum = 0;
+          DATA.pins.forEach(function (p) { if (p.mapKey === state.mapKey && p.number > maxNum) maxNum = p.number; });
+          var row = { map: item.mapKey, x: nx, y: ny, label: item.label, note: item.note, icon_key: item.iconKey, show_label: item.showLabel, visibility: item.visibility, status: item.status, number: maxNum + 1, link_type: item.linkType, link_key: item.linkKey || null };
+          sb.from("map_pins").insert(row).select("id,map,x,y,label,note,icon_key,show_label,visibility,status,number,link_type,link_key").then(function (res) {
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("The copy could not be made."); return; }
+            var np = mapPinRow(res.data[0]);
+            DATA.pins.push(np);
+            var sz = MAP_EXTRAS.sizes["pin-" + id];
+            if (sz != null) { MAP_EXTRAS.sizes["pin-" + np.id] = sz; saveExtras("sizes"); }
+            state.selectedPinId = np.id; state.selectedMarkerId = null;
+            setMapMsg("Copied as pin " + np.number + ". Drag it where you want it.");
+            render();
+          });
+        } else {
+          var mrow = { map: item.mapKey, kind: item.kind, x: nx, y: ny, label: item.label, note: item.note, icon_key: item.iconKey, show_label: item.showLabel, visibility: item.visibility, hex_q: item.hexQ, hex_r: item.hexR };
+          sb.from("map_markers").insert(mrow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("The copy could not be made."); return; }
+            var nm = mapMarkerRow(res.data[0]);
+            MARKERS.push(nm);
+            var lk = MAP_EXTRAS.links["marker-" + id];
+            if (lk) { MAP_EXTRAS.links["marker-" + nm.id] = lk; saveExtras("links"); }
+            var sz2 = MAP_EXTRAS.sizes["marker-" + id];
+            if (sz2 != null) { MAP_EXTRAS.sizes["marker-" + nm.id] = sz2; saveExtras("sizes"); }
+            state.selectedMarkerId = nm.id; state.selectedPinId = null;
+            setMapMsg("Copied. Drag it where you want it.");
+            render();
+          });
+        }
+      }
+      function openRenameDialog(kind, id) {
+        var item = mapItemByKind(kind, id);
+        if (!item) return;
+        closeMapCtx();
+        var old = document.getElementById("mapDialog");
+        if (old) old.remove();
+        var wrap = document.createElement("div");
+        wrap.className = "map-dialog-backdrop";
+        wrap.id = "mapDialog";
+        var title = kind === "pin" ? "Rename pin " + item.number : "Rename " + (item.kind === "party" ? "party marker" : item.kind);
+        wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
+          + '<h3>' + esc(title) + "</h3>"
+          + '<label class="gm-field"><span>Name shown on the map</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
+          + '<label class="gm-field"><span>Note</span><textarea id="dlgNote" class="search-input" rows="3">' + esc(item.note || "") + "</textarea></label>"
+          + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save name</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+        document.body.appendChild(wrap);
+        var input = document.getElementById("dlgLabel");
+        input.focus(); input.select();
+        document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
+        wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) wrap.remove(); });
+        document.getElementById("dlgSave").addEventListener("click", function () {
+          var msg = document.getElementById("dlgMsg");
+          if (!sb) { msg.textContent = "Live sync is not connected."; return; }
+          var patch = { label: input.value, note: document.getElementById("dlgNote").value };
+          var table = kind === "pin" ? "map_pins" : "map_markers";
+          sb.from(table).update(patch, { returning: "minimal" }).eq("id", id).then(function (res) {
+            if (res.error) { msg.textContent = "The name could not be saved."; return; }
+            item.label = patch.label; item.note = patch.note;
+            wrap.remove();
+            setMapMsg("Saved.");
+            render();
+          });
+        });
+      }
+      function openIconPickerDialog(kind, id) {
+        var item = mapItemByKind(kind, id);
+        if (!item) return;
+        closeMapCtx();
+        var old = document.getElementById("mapDialog");
+        if (old) old.remove();
+        var wrap = document.createElement("div");
+        wrap.className = "map-dialog-backdrop";
+        wrap.id = "mapDialog";
+        var optsHtml = "";
+        ICONS.forEach(function (ic) { optsHtml += '<option value="' + esc(ic.key) + '"' + (item.iconKey === ic.key ? " selected" : "") + ">" + esc(ic.category + ": " + ic.name) + "</option>"; });
+        wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="Change icon">'
+          + "<h3>Change icon</h3>"
+          + '<label class="gm-field"><span>Icon</span><select id="dlgIcon" class="search-input"><option value="">' + (kind === "pin" ? "Numbered pin, no icon" : "Default symbol") + "</option>" + optsHtml + "</select></label>"
+          + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save icon</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+        document.body.appendChild(wrap);
+        document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
+        wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) wrap.remove(); });
+        document.getElementById("dlgSave").addEventListener("click", function () {
+          var msg = document.getElementById("dlgMsg");
+          if (!sb) { msg.textContent = "Live sync is not connected."; return; }
+          var val = document.getElementById("dlgIcon").value || null;
+          var table = kind === "pin" ? "map_pins" : "map_markers";
+          sb.from(table).update({ icon_key: val }, { returning: "minimal" }).eq("id", id).then(function (res) {
+            if (res.error) { msg.textContent = "The icon could not be saved."; return; }
+            item.iconKey = val;
+            wrap.remove();
+            setMapMsg("Icon saved.");
+            render();
+          });
+        });
+      }
+      function createMapItemAt(x, y, mode, iconKey, startHidden) {
+        if (!sb) { setMapMsg("Live sync is not connected, so nothing could be added."); return; }
+        var pos = finalizePos(x, y);
+        var vis = startHidden ? "gm" : "player";
+        if (mode === "pin") {
+          var maxNum = 0;
+          DATA.pins.forEach(function (p) { if (p.mapKey === state.mapKey && p.number > maxNum) maxNum = p.number; });
+          var pinRow = { map: state.mapKey, x: pos.x, y: pos.y, label: "New pin", note: "", icon_key: iconKey || null, show_label: true, visibility: vis, status: "approved", number: maxNum + 1, link_type: "none", link_key: null };
+          sb.from("map_pins").insert(pinRow).select("id,map,x,y,label,note,icon_key,show_label,visibility,status,number,link_type,link_key").then(function (res) {
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("The pin could not be added."); loadLive(); return; }
+            var np = mapPinRow(res.data[0]);
+            DATA.pins.push(np);
+            state.selectedPinId = np.id; state.selectedMarkerId = null;
+            setMapMsg("Pin " + np.number + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
+            render();
+          });
+        } else {
+          var kind = mode === "location" || mode === "token" || mode === "party" ? mode : "other";
+          var label = kind === "location" ? "New location" : kind === "token" ? "New token" : kind === "party" ? "The Party" : "New marker";
+          var mkRow = { map: state.mapKey, kind: kind, x: pos.x, y: pos.y, label: label, note: "", icon_key: iconKey || (kind === "party" ? "party-token" : null), show_label: true, visibility: vis, hex_q: pos.q, hex_r: pos.r };
+          sb.from("map_markers").insert(mkRow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
+            if (res.error || !res.data || !res.data[0]) { setMapMsg("That item could not be added."); loadLive(); return; }
+            var nm = mapMarkerRow(res.data[0]);
+            MARKERS.push(nm);
+            state.selectedMarkerId = nm.id; state.selectedPinId = null;
+            setMapMsg(label + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
+            render();
+          });
+        }
+      }
+      function openItemCtx(kind, id, clientX, clientY) {
+        var item = mapItemByKind(kind, id);
+        if (!item) return;
+        if (kind === "pin") { state.selectedPinId = id; state.selectedMarkerId = null; }
+        else { state.selectedMarkerId = id; state.selectedPinId = null; }
+        refreshMapView();
+        var name = kind === "pin" ? "Pin " + item.number + ": " + (item.label || "Untitled") : (item.label || "Marker");
+        var items = [];
+        items.push({ label: "Zoom to it", action: function () { if (stage) stage.zoomToPoint(item.x, item.y); } });
+        if (gmIsUnlocked()) {
+          var locked = isLocked(kind, id);
+          var hidden = item.visibility === "gm";
+          items.push({ label: "Rename\u2026", action: function () { openRenameDialog(kind, id); } });
+          items.push({ label: "Change icon\u2026", action: function () { openIconPickerDialog(kind, id); } });
+          items.push({ label: locked ? "Unlock (allow dragging)" : "Lock (stop dragging)", action: function () { toggleItemLock(kind, id); } });
+          items.push({ label: hidden ? "Reveal to players" : "Hide from players", action: function () { toggleItemHidden(kind, id); } });
+          items.push({ label: "Duplicate", action: function () { duplicateMapItem(kind, id); } });
+          items.push("sep");
+          items.push({ label: "Delete", danger: true, disabled: locked, action: function () { deleteMapItem(kind, id); } });
+          if (locked) items.push({ note: "Locked items cannot be dragged or deleted. Unlock to change that." });
+          if (hidden) items.push({ note: "Hidden from players: only you can see this item." });
+        }
+        openMapCtx(clientX, clientY, name, items);
+      }
+      function openMapBgCtx(x, y, clientX, clientY) {
+        if (!gmIsUnlocked()) {
+          openMapCtx(clientX, clientY, MAPS[state.mapKey].title, [
+            { label: "Fit map to screen", action: function () { if (stage) stage.fit(); } }
+          ]);
+          return;
+        }
+        function add(mode, hidden) { return function () { createMapItemAt(x, y, mode, null, hidden); }; }
+        var anyLocked = false, anyHidden = false;
+        visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { if (isLocked("pin", p.id)) anyLocked = true; if (p.visibility === "gm") anyHidden = true; } });
+        visibleMarkers(state.mapKey).forEach(function (m) { if (isLocked("marker", m.id)) anyLocked = true; if (m.visibility === "gm") anyHidden = true; });
+        openMapCtx(clientX, clientY, "Add here", [
+          { label: "Add numbered pin here", action: add("pin", false) },
+          { label: "Add location here", action: add("location", false) },
+          { label: "Add token here", action: add("token", false) },
+          { label: "Add marker here", action: add("marker", false) },
+          { label: "Place party marker here", action: function () { state.mapToolMode = "party"; placeToolMarker(x, y); } },
+          "sep",
+          { label: "Add pin, hidden from players", action: add("pin", true) },
+          { label: "Add location, hidden from players", action: add("location", true) },
+          { label: "Add token, hidden from players", action: add("token", true) },
+          "sep",
+          { label: "Lock everything on this map", action: function () { setAllLocks(true); } },
+          { label: "Unlock everything on this map", disabled: !anyLocked, action: function () { setAllLocks(false); } },
+          { label: "Reveal everything on this map", disabled: !anyHidden, action: function () { revealAllItems(); } },
+          { label: "Fit map to screen", action: function () { if (stage) stage.fit(); } },
+          { note: "Tip: drag any unlocked pin or marker to move it. Drag an icon from the library below onto the map to drop it here. Select an item and press Delete to remove it." }
+        ]);
+      }
+      function setAllLocks(locked) {
+        visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { if (locked) MAP_EXTRAS.locks["pin-" + p.id] = true; else delete MAP_EXTRAS.locks["pin-" + p.id]; } });
+        visibleMarkers(state.mapKey).forEach(function (m) { if (locked) MAP_EXTRAS.locks["marker-" + m.id] = true; else delete MAP_EXTRAS.locks["marker-" + m.id]; });
+        saveExtras("locks").then(function (ok) {
+          setMapMsg(ok ? (locked ? "Everything on this map is locked." : "Everything on this map is unlocked.") : "The lock change could not be saved.");
+          render();
+        });
+      }
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { closeMapCtx(); return; }
+        if (state.view !== "maps" || !gmIsUnlocked()) return;
+        if (e.key !== "Delete" && e.key !== "Backspace") return;
+        var t = e.target;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+        if (document.getElementById("mapDialog")) return;
+        var kind = state.selectedPinId != null ? "pin" : state.selectedMarkerId != null ? "marker" : null;
+        var id = kind === "pin" ? state.selectedPinId : state.selectedMarkerId;
+        if (!kind) return;
+        e.preventDefault();
+        var armKey = kind + "-" + id;
+        if (isLocked(kind, id)) { setMapMsg("That item is locked. Unlock it before deleting it."); return; }
+        if (state.deleteArmedKey === armKey) {
+          state.deleteArmedKey = null;
+          deleteMapItem(kind, id);
+        } else {
+          state.deleteArmedKey = armKey;
+          var item = mapItemByKind(kind, id);
+          setMapMsg("Press Delete again to remove \u201C" + ((item && item.label) || "that item") + "\u201D for good.");
+        }
+      });
+      function revealAllItems() {
+        if (!sb) return;
+        var jobs = [];
+        visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey && p.visibility === "gm") { jobs.push(sb.from("map_pins").update({ visibility: "player" }, { returning: "minimal" }).eq("id", p.id)); p.visibility = "player"; } });
+        visibleMarkers(state.mapKey).forEach(function (m) { if (m.visibility === "gm") { jobs.push(sb.from("map_markers").update({ visibility: "player" }, { returning: "minimal" }).eq("id", m.id)); m.visibility = "player"; } });
+        Promise.all(jobs).then(function () { setMapMsg("Everything on this map is visible to players now."); render(); });
+      }
       function renderMaps(main) {
         var mapDef = MAPS[state.mapKey];
         if (!mapDef) {
@@ -2678,6 +3100,11 @@
           + '<button type="button" class="ghost-btn" id="togglePins" aria-pressed="' + state.showPins + '">' + (state.showPins ? "Hide pins" : "Show pins") + "</button>"
           + '<button type="button" class="ghost-btn" id="toggleLabels" aria-pressed="' + state.showLabels + '">' + (state.showLabels ? "Hide labels" : "Show labels") + "</button>"
           + "</div>";
+        if (gmIsUnlocked()) {
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag any unlocked pin or marker to move it. Drag an icon from the library below onto the map, or tap an icon to arm it and then tap the map. Right-click the map to add items, or right-click any item to rename, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
+            + (state.pendingIconKey ? '<p class="small" style="margin-top:0.25rem;color:var(--teal)">Placing an icon: tap the map where it should land, or tap the icon again to cancel.</p>' : "")
+            + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>";
+        }
         html += '<div style="margin-top:0.75rem">'
           + '<div class="map-frame" id="mapFrame" role="application" tabindex="0" aria-label="Interactive map: ' + esc(mapDef.title) + '. Drag to pan, use the zoom bar or pinch to zoom, arrow keys pan, plus and minus zoom.">'
           + '<div class="map-inner" data-map-inner>'
@@ -2700,6 +3127,8 @@
           + '<ol class="pin-list">';
         pins.forEach(function (p) {
           html += '<li><button type="button" data-pinlist="' + p.id + '"><span class="num">' + p.number + '.</span> <span style="font-weight:500">' + esc(p.label) + "</span>"
+            + (p.visibility === "gm" ? ' <span class="hidden-tag">Hidden</span>' : "")
+            + (isLocked("pin", p.id) ? ' <span class="hidden-tag" style="background:#221d13">Locked</span>' : "")
             + (p.note ? '<span class="note">' + esc(p.note) + "</span>" : "") + "</button></li>";
         });
         if (pins.length === 0) html += '<li class="small muted">No pins on this map yet.</li>';
@@ -2716,7 +3145,7 @@
           if (items.length === 0) return;
           html += '<h4 class="font-display" style="font-size:1rem;font-weight:600;color:var(--accent-deep);margin:1rem 0 0">' + esc(cat) + '</h4><div class="icon-grid">';
           items.forEach(function (ic) {
-            html += '<div class="icon-cell"><img src="' + esc(ic.src) + '" alt="" loading="lazy" decoding="async"><span>' + esc(ic.name) + "</span></div>";
+            html += '<div class="icon-cell' + (state.pendingIconKey === ic.key ? " armed" : "") + '" data-iconcell="' + esc(ic.key) + '"' + (gmIsUnlocked() ? ' draggable="true" title="Drag onto the map, or tap to arm and then tap the map"' : "") + '><img src="' + esc(ic.src) + '" alt="" loading="lazy" decoding="async"><span>' + esc(ic.name) + "</span></div>";
           });
           html += "</div>";
         });
@@ -2749,7 +3178,26 @@
           },
           getCompass: function () { return compassFor(state.mapKey); },
           isGm: function () { return gmIsUnlocked(); },
+          isItemLocked: function (kind, id) { return isLocked(kind, id); },
+          canDragPins: gmIsUnlocked(),
           canDragMarkers: gmIsUnlocked(),
+          onMovePin: function (id, x, y) {
+            var pin = null;
+            DATA.pins.forEach(function (pp) { if (pp.id === id) pin = pp; });
+            if (!pin || !sb) return;
+            sb.from("map_pins").update({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }, { returning: "minimal" }).eq("id", id).then(function (res) {
+              if (res.error) { if (stage) stage.refreshPins(); setMapMsg("That pin could not be moved."); return; }
+              pin.x = Math.round(x * 100) / 100; pin.y = Math.round(y * 100) / 100;
+              if (stage) stage.refreshPins();
+            });
+          },
+          onContextItem: function (kind, id, cx, cy) { openItemCtx(kind, id, cx, cy); },
+          onContextMap: function (x, y, cx, cy) { openMapBgCtx(x, y, cx, cy); },
+          getDragIcon: function () { return state.pendingIconKey; },
+          onDropIcon: gmIsUnlocked() ? function (iconKey, x, y) {
+            state.pendingIconKey = null;
+            createMapItemAt(x, y, "token", iconKey, false);
+          } : null,
           onMoveMarker: function (id, x, y) {
             var m = null;
             MARKERS.forEach(function (mm) { if (mm.id === id) m = mm; });
@@ -2767,7 +3215,19 @@
             c.x = Math.round(x * 100) / 100; c.y = Math.round(y * 100) / 100;
             saveExtras("compass");
           },
-          onMapClick: (gmIsUnlocked() && state.mapToolMode) ? function (x, y) { placeToolMarker(x, y); } : null
+          onMapClick: gmIsUnlocked() ? function (x, y) {
+            if (state.pendingIconKey) {
+              var ik = state.pendingIconKey;
+              state.pendingIconKey = null;
+              createMapItemAt(x, y, "token", ik, false);
+              return true;
+            }
+            if (state.mapToolMode) {
+              placeToolMarker(x, y);
+              return true;
+            }
+            return false;
+          } : null
         });
         renderPinPanel(panel);
         renderMarkerPanel(mPanel);
@@ -2806,6 +3266,28 @@
           document.getElementById("mapFrame").scrollIntoView({ block: "nearest" });
           if (gmIsUnlocked()) render();
         });
+        var iconCells = main.querySelectorAll("[data-iconcell]");
+        for (var ic2 = 0; ic2 < iconCells.length; ic2++) {
+          iconCells[ic2].addEventListener("dragstart", function (ev) {
+            var key = this.getAttribute("data-iconcell");
+            state.pendingIconKey = key;
+            try {
+              ev.dataTransfer.setData("application/x-map-icon", key);
+              ev.dataTransfer.setData("text/plain", key);
+              ev.dataTransfer.effectAllowed = "copy";
+            } catch (err) { /* drag data unavailable; the tap-to-place path still works */ }
+          });
+          iconCells[ic2].addEventListener("dragend", function () {
+            var frame = document.getElementById("mapFrame");
+            if (frame) frame.classList.remove("drop-ready");
+          });
+          iconCells[ic2].addEventListener("click", function () {
+            if (!gmIsUnlocked()) return;
+            var key = this.getAttribute("data-iconcell");
+            state.pendingIconKey = state.pendingIconKey === key ? null : key;
+            render();
+          });
+        }
         if (gmIsUnlocked()) wireMapTools(main);
         decorateSiteText(main);
       }
