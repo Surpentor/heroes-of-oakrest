@@ -1534,7 +1534,7 @@
             if (pw.length < 4) { state.gmError = "Use at least four characters, so a stray tap cannot set it by accident."; renderGmSignIn(main); renderFooterOnly(main); return; }
             if (pw !== pw2) { state.gmError = "The two entries do not match. Try again."; renderGmSignIn(main); renderFooterOnly(main); return; }
             sha256Hex(pw).then(function (hex) {
-              function saveFailed() { state.gmError = "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); }
+              function saveFailed(msg) { state.gmError = msg || "The passcode could not be saved. Check the connection and try again."; renderGmSignIn(main); renderFooterOnly(main); }
               function saveSucceeded() {
                 state.gmPasscodeState = "set";
                 gmFetch(pw).then(function (data) {
@@ -1543,16 +1543,15 @@
                   state.gmError = ""; state.view = "gm"; render(); window.scrollTo(0, 0);
                 });
               }
-              function tryUpdate() {
-                sb.from("settings").update({ value: hex }, { returning: "minimal" }).eq("key", "gm_passcode_hash").then(function (res2) {
-                  if (res2.error) { saveFailed(); return; }
+              var oldHashPromise = gmPasscodeMem ? sha256Hex(gmPasscodeMem) : Promise.resolve(null);
+              oldHashPromise.then(function (oldHash) {
+                sb.rpc("gm_set_passcode", { old_hash: oldHash, new_hash: hex }).then(function (res) {
+                  if (res.error) { saveFailed(res.error.message || null); return; }
+                  var data = res.data;
+                  if (!data || data.ok !== true) { saveFailed(data && data.error ? data.error : null); return; }
                   saveSucceeded();
                 }, function () { saveFailed(); });
-              }
-              sb.from("settings").insert({ key: "gm_passcode_hash", value: hex }, { returning: "minimal" }).then(function (res) {
-                if (res.error) { tryUpdate(); return; }
-                saveSucceeded();
-              }, function () { tryUpdate(); });
+              }, function () { saveFailed(); });
             });
             return;
           }
@@ -1660,10 +1659,15 @@
           + '<p class="small" id="libMsg" role="status" style="margin:0.5rem 0 0"></p></section>';
         html += '<section aria-label="Live sync status" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Live Sync Status</h3>'
           + '<p class="small" style="margin-top:0.25rem">' + esc(syncLine()) + "</p>" + tableStatusLinesHtml() + "</section>";
+        var gmResetCurrentHtml = "";
+        if (state.gmResetArmed && !gmPasscodeMem) {
+          gmResetCurrentHtml = '<label class="gm-field"><span>Current passcode</span><input type="password" id="gmResetCurrentPw" class="search-input" autocomplete="current-password"></label>'
+            + '<p class="small muted" style="margin-top:0.25rem">Enter the current passcode to confirm the reset.</p>';
+        }
         html += '<section aria-label="GM passcode" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">GM Passcode</h3>'
           + '<p class="small muted" style="margin-top:0.25rem">Resetting deletes the passcode hash from the site database and signs you out, so a new passcode can be set on the sign-in view. There is no way to recover a forgotten passcode from this page.</p>'
           + (state.gmResetArmed
-            ? '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-teal" id="gmResetYes">Yes, reset the passcode</button><button type="button" class="btn btn-outline" id="gmResetNo">Keep it</button></div>'
+            ? gmResetCurrentHtml + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-teal" id="gmResetYes">Yes, reset the passcode</button><button type="button" class="btn btn-outline" id="gmResetNo">Keep it</button></div>'
             : '<button type="button" class="ghost-btn" id="gmResetArm" style="margin-top:0.5rem">Reset the GM passcode</button>')
           + '<p class="small" id="gmResetMsg" role="status" style="margin:0.5rem 0 0"></p></section>';
         html += '<div style="margin-top:2rem"><button type="button" class="btn btn-outline" id="gmSignOut">GM Sign Out</button></div></div>';
@@ -1722,14 +1726,27 @@
         var yes = document.getElementById("gmResetYes");
         if (yes) yes.addEventListener("click", function () {
           if (!sb) return;
-          sb.from("settings").delete({ returning: "minimal" }).eq("key", "gm_passcode_hash").then(function (r2) {
-            if (r2.error) { var m = document.getElementById("gmResetMsg"); if (m) m.textContent = "The passcode could not be reset. Live sync is not connected."; return; }
-            gmLock();
-            GM = { chronicle: [], people: [], lore: [], secrets: [], notes: [], review: [] };
-            state.gmPasscodeState = "unset"; state.gmResetArmed = false; state.gmError = "";
-            state.view = "gmsignin"; state.reader = null;
-            render(); window.scrollTo(0, 0);
-          });
+          function resetFailed(msg) { var m = document.getElementById("gmResetMsg"); if (m) m.textContent = msg || "The passcode could not be reset. Check the connection and try again."; }
+          function doReset(oldHash) {
+            sb.rpc("gm_set_passcode", { old_hash: oldHash, new_hash: null }).then(function (res) {
+              if (res.error) { resetFailed(res.error.message || null); return; }
+              var data = res.data;
+              if (!data || data.ok !== true) { resetFailed(data && data.error ? data.error : null); return; }
+              gmLock();
+              GM = { chronicle: [], people: [], lore: [], secrets: [], notes: [], review: [] };
+              state.gmPasscodeState = "unset"; state.gmResetArmed = false; state.gmError = "";
+              state.view = "gmsignin"; state.reader = null;
+              render(); window.scrollTo(0, 0);
+            }, function () { resetFailed(); });
+          }
+          if (gmPasscodeMem) {
+            sha256Hex(gmPasscodeMem).then(function (oldHash) { doReset(oldHash); }, function () { resetFailed(); });
+            return;
+          }
+          var curInput = document.getElementById("gmResetCurrentPw");
+          var cur = curInput ? curInput.value : "";
+          if (!cur) { resetFailed("Enter the current passcode to reset it."); if (curInput) curInput.focus(); return; }
+          sha256Hex(cur).then(function (oldHash) { doReset(oldHash); }, function () { resetFailed(); });
         });
         document.getElementById("gmSignOut").addEventListener("click", function () {
           gmLock();
