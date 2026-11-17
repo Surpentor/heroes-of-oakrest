@@ -329,6 +329,24 @@
 
       .pin-wrap { touch-action: none; }
       .map-pin { touch-action: none; }
+      .map-pin img { -webkit-user-drag: none; user-select: none; }
+      .pin-wrap.is-dragging { z-index: 8; }
+      .pin-wrap.is-dragging .map-pin { animation: none; cursor: grabbing; filter: brightness(1.15) drop-shadow(0 6px 8px rgba(0,0,0,0.65)); }
+      /* Right-click menu + picker thumbnails */
+      .map-ctx button.ctx-item .ctx-thumb, .icon-name-list button.ctx-item .ctx-thumb { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; object-fit: contain; background: #ece5cd; border: 1px solid var(--border); border-radius: 4px; padding: 2px; }
+      .map-ctx button.ctx-item .ctx-glyph, .icon-name-list button.ctx-item .ctx-glyph { display: flex; align-items: center; justify-content: center; font-size: 1.125rem; color: #9c3418; }
+      .map-ctx button.ctx-item .ctx-label { flex: 1 1 auto; min-width: 0; }
+      .icon-name-list button.ctx-item { display: flex; align-items: center; gap: 0.5rem; }
+      .dlg-preview { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); padding: 0.5rem 0.75rem; }
+      .dlg-preview img { width: 3.5rem; height: 3.5rem; object-fit: contain; background: #ece5cd; border-radius: 4px; padding: 3px; }
+      .dlg-preview .dlg-preview-name { font-weight: 600; }
+      /* GM icon library above the map: drag onto the map, or tap then tap the map */
+      .icon-lib { margin-top: 0.75rem; border: 1px solid var(--gold); border-radius: var(--radius); background: var(--surface); padding: 0.75rem; }
+      .icon-lib .icon-lib-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
+      .icon-lib .icon-grid { max-height: 15rem; overflow-y: auto; padding-right: 0.25rem; }
+      .icon-lib .icon-cell { cursor: grab; user-select: none; -webkit-user-select: none; }
+      .icon-lib .icon-cell:active { cursor: grabbing; }
+      .icon-lib .icon-cell:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
       .map-ctx .ctx-search { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); padding: 0.5rem; font: inherit; font-size: 0.875rem; margin: 0.25rem 0; min-height: 2.25rem; }
       .map-ctx .ctx-group, .icon-name-list .ctx-group { padding: 0.375rem 0.5rem 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gold); margin: 0; }
       .icon-name-list { display: grid; gap: 0.25rem; max-height: 46dvh; overflow-y: auto; margin-top: 0.5rem; }
@@ -677,6 +695,11 @@
       function iconSrc(iconKey) {
         if (!iconKey) return null;
         for (var i = 0; i < ICONS.length; i++) if (ICONS[i].key === iconKey) return ICONS[i].src;
+        return null;
+      }
+      function iconName(iconKey) {
+        if (!iconKey) return null;
+        for (var i = 0; i < ICONS.length; i++) if (ICONS[i].key === iconKey) return ICONS[i].name;
         return null;
       }
 
@@ -2066,49 +2089,72 @@
           return { x: Math.round(Math.max(0, Math.min(100, px)) * 100) / 100, y: Math.round(Math.max(0, Math.min(100, py)) * 100) / 100 };
         }
         function dragSuppressed(key) { return lastDrag.key === key && Date.now() - lastDrag.t < 400; }
-        function attachDrag(el, wrap, key, onDone) {
+        // One unified press handler per map item: tap selects, a press held
+        // still opens the item menu, and a press that moves drags the item.
+        // Keeping all three in a single pointerdown registration matters:
+        // separate competing registrations (an earlier long-press timer plus
+        // a separate drag listener) and the browser's native image drag on
+        // the <img> inside image pins were cancelling each other out, which
+        // is why dragging pins did not work.
+        function attachPressDrag(el, wrap, key, handlers) {
           el.addEventListener("pointerdown", function (ev) {
             if (ev.pointerType === "mouse" && ev.button !== 0) return;
             ev.stopPropagation();
             var pid = ev.pointerId;
             var startX = ev.clientX, startY = ev.clientY;
-            var pos = null, moved = false;
+            var pos = null, moved = false, longFired = false;
+            var timer = null;
+            if (handlers.onLongPress) {
+              timer = setTimeout(function () {
+                longFired = true;
+                lastDrag = { key: key, t: Date.now() };
+                cleanup();
+                handlers.onLongPress(startX, startY);
+              }, 600);
+            }
             function mv(e) {
               if (e.pointerId !== pid) return;
-              if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
-              moved = true;
+              if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 6) return;
+              if (!moved) {
+                moved = true;
+                if (timer) { clearTimeout(timer); timer = null; }
+                if (wrap && handlers.canDrag) wrap.classList.add("is-dragging");
+              }
               if (e.cancelable) e.preventDefault();
               var pt = toMapCoords(e.clientX, e.clientY);
               pos = pt;
-              wrap.style.left = pt.x + "%"; wrap.style.top = pt.y + "%";
+              if (wrap && handlers.canDrag) { wrap.style.left = pt.x + "%"; wrap.style.top = pt.y + "%"; }
             }
-            function up() {
+            function cleanup() {
+              if (timer) { clearTimeout(timer); timer = null; }
               window.removeEventListener("pointermove", mv, true);
               window.removeEventListener("pointerup", up, true);
               window.removeEventListener("pointercancel", up, true);
-              if (moved && pos) { lastDrag = { key: key, t: Date.now() }; onDone(pos.x, pos.y); }
+            }
+            function up(e) {
+              if (e.pointerId !== pid) return;
+              var wasMoved = moved, finalPos = pos;
+              cleanup();
+              if (wrap) wrap.classList.remove("is-dragging");
+              if (longFired) return;
+              if (wasMoved && finalPos && handlers.canDrag && handlers.onDragDone) {
+                lastDrag = { key: key, t: Date.now() };
+                handlers.onDragDone(finalPos.x, finalPos.y);
+              }
             }
             window.addEventListener("pointermove", mv, true);
             window.addEventListener("pointerup", up, true);
             window.addEventListener("pointercancel", up, true);
           });
-        }
-        function armLongPress(x, y, kind, id) {
-          if (!opts.onContextItem) return;
-          var timer = setTimeout(function () {
-            cleanup();
-            opts.onContextItem(kind, id, x, y);
-          }, 600);
-          function mv(e) { if (Math.hypot(e.clientX - x, e.clientY - y) > 10) cleanup(); }
-          function cleanup() {
-            clearTimeout(timer);
-            window.removeEventListener("pointermove", mv, true);
-            window.removeEventListener("pointerup", cleanup, true);
-            window.removeEventListener("pointercancel", cleanup, true);
-          }
-          window.addEventListener("pointermove", mv, true);
-          window.addEventListener("pointerup", cleanup, true);
-          window.addEventListener("pointercancel", cleanup, true);
+          el.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            if (dragSuppressed(key)) return;
+            if (handlers.onTap) handlers.onTap();
+          });
+          el.addEventListener("contextmenu", function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            if (handlers.onContext) handlers.onContext(ev.clientX, ev.clientY);
+          });
         }
 
         function buildPins() {
@@ -2126,7 +2172,7 @@
             if (art) {
               html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-pinwrap="' + p.id + '" data-size="' + sz + '" style="left:' + p.x + "%;top:" + p.y + '%">'
                 + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '" style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms">'
-                + '<img src="' + art + '" alt="">' + '<span class="badge">' + p.number + "</span>" + pBadges
+                + '<img src="' + art + '" alt="" draggable="false">' + '<span class="badge">' + p.number + "</span>" + pBadges
                 + "</button>"
                 + (labelOn ? '<span class="map-label' + (p.x > 76 ? " flip" : "") + '">' + esc(p.label) + "</span>" : "")
                 + "</div>";
@@ -2154,7 +2200,7 @@
             var mStateCls = (mLocked ? " is-locked" : "") + (mHidden ? " is-hidden" : "") + ((opts.canDragMarkers && !mLocked) ? " draggable" : "");
             html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-markerwrap="' + m.id + '" data-size="' + itemSize("marker", m.id) + '" style="left:' + m.x + "%;top:" + m.y + '%">'
               + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
-              + (art ? '<img src="' + art + '" alt="">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
+              + (art ? '<img src="' + art + '" alt="" draggable="false">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
               + "</button>"
               + (labelOn ? '<span class="map-label' + (m.x > 76 ? " flip" : "") + '">' + esc(m.label) + "</span>" : "")
               + "</div>";
@@ -2175,53 +2221,38 @@
           }
           var btns = layer.querySelectorAll("[data-pin]");
           for (var j = 0; j < btns.length; j++) {
-            btns[j].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); armLongPress(ev.clientX, ev.clientY, "pin", Number(this.getAttribute("data-pin"))); });
-            btns[j].addEventListener("click", function (ev) {
-              ev.stopPropagation();
-              if (dragSuppressed("pin-" + this.getAttribute("data-pin"))) return;
-              opts.onSelectPin(Number(this.getAttribute("data-pin")));
-            });
-            btns[j].addEventListener("contextmenu", function (ev) {
-              ev.preventDefault(); ev.stopPropagation();
-              if (opts.onContextItem) opts.onContextItem("pin", Number(this.getAttribute("data-pin")), ev.clientX, ev.clientY);
-            });
+            (function (btn) {
+              var pid = Number(btn.getAttribute("data-pin"));
+              var canDrag = !!(opts.canDragPins && opts.onMovePin && !(opts.isItemLocked && opts.isItemLocked("pin", pid)));
+              attachPressDrag(btn, btn.closest(".pin-wrap"), "pin-" + pid, {
+                canDrag: canDrag,
+                onTap: function () { opts.onSelectPin(pid); },
+                onLongPress: opts.onContextItem ? function (x, y) { opts.onContextItem("pin", pid, x, y); } : null,
+                onContext: opts.onContextItem ? function (x, y) { opts.onContextItem("pin", pid, x, y); } : null,
+                onDragDone: canDrag ? function (x, y) { opts.onMovePin(pid, x, y); } : null
+              });
+            })(btns[j]);
           }
           var mbtns = layer.querySelectorAll("[data-marker]");
           for (var k = 0; k < mbtns.length; k++) {
-            mbtns[k].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); armLongPress(ev.clientX, ev.clientY, "marker", Number(this.getAttribute("data-marker"))); });
-            mbtns[k].addEventListener("click", function (ev) {
-              ev.stopPropagation();
-              if (dragSuppressed("marker-" + this.getAttribute("data-marker"))) return;
-              if (opts.onSelectMarker) opts.onSelectMarker(Number(this.getAttribute("data-marker")));
-            });
-            mbtns[k].addEventListener("contextmenu", function (ev) {
-              ev.preventDefault(); ev.stopPropagation();
-              if (opts.onContextItem) opts.onContextItem("marker", Number(this.getAttribute("data-marker")), ev.clientX, ev.clientY);
-            });
-          }
-          if (opts.canDragPins && opts.onMovePin) {
-            var pinDragBtns = layer.querySelectorAll("[data-pin]");
-            for (var pd = 0; pd < pinDragBtns.length; pd++) {
-              (function (btn) {
-                var pid = Number(btn.getAttribute("data-pin"));
-                if (opts.isItemLocked && opts.isItemLocked("pin", pid)) return;
-                attachDrag(btn, btn.closest(".pin-wrap"), "pin-" + pid, function (x, y) { opts.onMovePin(pid, x, y); });
-              })(pinDragBtns[pd]);
-            }
-          }
-          if (opts.canDragMarkers && opts.onMoveMarker) {
-            var dragBtns = layer.querySelectorAll("[data-marker]");
-            for (var d = 0; d < dragBtns.length; d++) {
-              (function (btn) {
-                var mid = Number(btn.getAttribute("data-marker"));
-                if (opts.isItemLocked && opts.isItemLocked("marker", mid)) return;
-                attachDrag(btn, btn.closest(".pin-wrap"), "marker-" + mid, function (x, y) { opts.onMoveMarker(mid, x, y); });
-              })(dragBtns[d]);
-            }
+            (function (btn) {
+              var mid = Number(btn.getAttribute("data-marker"));
+              var canDrag = !!(opts.canDragMarkers && opts.onMoveMarker && !(opts.isItemLocked && opts.isItemLocked("marker", mid)));
+              attachPressDrag(btn, btn.closest(".pin-wrap"), "marker-" + mid, {
+                canDrag: canDrag,
+                onTap: function () { if (opts.onSelectMarker) opts.onSelectMarker(mid); },
+                onLongPress: opts.onContextItem ? function (x, y) { opts.onContextItem("marker", mid, x, y); } : null,
+                onContext: opts.onContextItem ? function (x, y) { opts.onContextItem("marker", mid, x, y); } : null,
+                onDragDone: canDrag ? function (x, y) { opts.onMoveMarker(mid, x, y); } : null
+              });
+            })(mbtns[k]);
           }
           var compassEl = layer.querySelector("[data-compasswrap]");
           if (compassEl && gmView && opts.onMoveCompass) {
-            attachDrag(compassEl, compassEl, "compass", function (x, y) { opts.onMoveCompass(x, y); });
+            attachPressDrag(compassEl, compassEl, "compass", {
+              canDrag: true,
+              onDragDone: function (x, y) { opts.onMoveCompass(x, y); }
+            });
           }
         }
 
@@ -2291,6 +2322,7 @@
             opts.onContextMap(pt.x, pt.y, e.clientX, e.clientY);
           }
         });
+        frame.addEventListener("dragstart", function (e) { e.preventDefault(); });
         frame.addEventListener("dragover", function (e) {
           if (!opts.onDropIcon) return;
           e.preventDefault();
@@ -2642,7 +2674,11 @@
           if (it === "sep") { html += '<hr class="ctx-sep">'; return; }
           if (it && it.group) { html += '<p class="ctx-group" data-group="' + esc(it.group) + '">' + esc(it.group) + "</p>"; return; }
           if (it.note) { html += '<p class="ctx-note">' + esc(it.note) + "</p>"; return; }
-          html += '<button type="button" class="ctx-item' + (it.danger ? " danger" : "") + '" data-ctx="' + idx + '" data-search="' + esc((it.search || it.label || "").toLowerCase()) + '"' + (it.keep ? ' data-keep="1"' : "") + (it.disabled ? " disabled" : "") + ">" + esc(it.label) + "</button>";
+          var thumb = "";
+          var thumbSrc = it.img || (it.iconKey ? iconSrc(it.iconKey) : null);
+          if (thumbSrc) thumb = '<img class="ctx-thumb" src="' + esc(thumbSrc) + '" alt="" draggable="false">';
+          else if (it.glyph) thumb = '<span class="ctx-thumb ctx-glyph" aria-hidden="true">' + esc(it.glyph) + "</span>";
+          html += '<button type="button" class="ctx-item' + (it.danger ? " danger" : "") + '" data-ctx="' + idx + '" data-search="' + esc((it.search || it.label || "").toLowerCase()) + '"' + (it.keep ? ' data-keep="1"' : "") + (it.disabled ? " disabled" : "") + ">" + thumb + '<span class="ctx-label">' + esc(it.label) + "</span></button>";
         });
         menu.innerHTML = html;
         document.body.appendChild(menu);
@@ -2818,7 +2854,7 @@
           + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
         var list = document.getElementById("dlgIconList");
-        var html = '<button type="button" class="ctx-item" data-icon="">' + (kind === "pin" ? "Numbered pin, no icon" : "Default symbol") + "</button>";
+        var html = '<button type="button" class="ctx-item" data-icon=""><span class="ctx-thumb ctx-glyph" aria-hidden="true">' + (kind === "pin" ? "\u25C6" : "\u2022") + '</span><span class="ctx-label">' + (kind === "pin" ? "Numbered pin, no icon" : "Default symbol") + "</span></button>";
         var catOrder = ["Travel", "Castles", "Medieval", "Roman", "Sylvan"];
         var extraCats = {};
         ICONS.forEach(function (ic) { if (catOrder.indexOf(ic.category) === -1) extraCats[ic.category] = true; });
@@ -2827,7 +2863,7 @@
           var inCat = ICONS.filter(function (ic) { return ic.category === cat; });
           if (inCat.length === 0) return;
           html += '<p class="ctx-group" data-group="' + esc(cat) + '">' + esc(cat) + "</p>";
-          inCat.forEach(function (ic) { html += '<button type="button" class="ctx-item" data-icon="' + esc(ic.key) + '">' + esc(ic.name) + "</button>"; });
+          inCat.forEach(function (ic) { html += '<button type="button" class="ctx-item" data-icon="' + esc(ic.key) + '"><img class="ctx-thumb" src="' + esc(ic.src) + '" alt="" draggable="false"><span class="ctx-label">' + esc(ic.name) + "</span></button>"; });
         });
         list.innerHTML = html;
         document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
@@ -2904,7 +2940,7 @@
           var locked = isLocked(kind, id);
           var hidden = item.visibility === "gm";
           items.push({ label: "Rename\u2026", action: function () { openRenameDialog(kind, id); } });
-          items.push({ label: "Change icon\u2026", action: function () { openIconPickerDialog(kind, id); } });
+          items.push({ label: "Change icon\u2026", iconKey: item.iconKey || null, glyph: item.iconKey ? null : "\u25C6", action: function () { openIconPickerDialog(kind, id); } });
           items.push({ label: locked ? "Unlock (allow dragging)" : "Lock (stop dragging)", action: function () { toggleItemLock(kind, id); } });
           items.push({ label: hidden ? "Reveal to players" : "Hide from players", action: function () { toggleItemHidden(kind, id); } });
           items.push({ label: "Duplicate", action: function () { duplicateMapItem(kind, id); } });
@@ -2923,8 +2959,13 @@
         wrap.className = "map-dialog-backdrop";
         wrap.id = "mapDialog";
         var heading = mode === "pin" ? "Label the new pin" : "Label the new item";
+        var previewSrc = iconKey ? iconSrc(iconKey) : null;
+        var previewHtml = previewSrc
+          ? '<div class="dlg-preview"><img src="' + esc(previewSrc) + '" alt="" draggable="false"><span><span class="dlg-preview-name">' + esc(iconName(iconKey) || "Icon") + '</span><br><span class="small muted">This is the icon that will appear on the map.</span></span></div>'
+          : (mode === "pin" ? '<div class="dlg-preview"><span class="ctx-thumb ctx-glyph" aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:3.5rem;height:3.5rem;font-size:1.5rem;color:#9c3418;background:#ece5cd;border-radius:4px">\u25C6</span><span><span class="dlg-preview-name">Numbered pin</span><br><span class="small muted">A rust diamond pin with the next number.</span></span></div>' : "");
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(heading) + '">'
           + "<h3>" + esc(heading) + "</h3>"
+          + previewHtml
           + '<label class="gm-field"><span>Label</span><input type="text" id="dlgLabelOnly" class="search-input" placeholder="Name shown on the map"></label>'
           + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgPlace">Place it</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
@@ -2953,8 +2994,8 @@
         var items = [];
         items.push({ label: state.addHidden ? "New items: hidden from players (tap to make visible)" : "New items: visible to players (tap to hide)", keep: true, action: function () { state.addHidden = !state.addHidden; openMapBgCtx(x, y, clientX, clientY); } });
         items.push("sep");
-        items.push({ label: "Numbered pin (no icon)", search: "numbered pin", action: function () { openLabelDialogForCreate(x, y, "pin", null); } });
-        items.push({ label: "Party marker", search: "party marker", action: function () { state.mapToolMode = "party"; placeToolMarker(x, y); } });
+        items.push({ label: "Numbered pin (no icon)", search: "numbered pin", glyph: "\u25C6", action: function () { openLabelDialogForCreate(x, y, "pin", null); } });
+        items.push({ label: "Party marker", search: "party marker", iconKey: "party-token", glyph: "\u2605", action: function () { state.mapToolMode = "party"; placeToolMarker(x, y); } });
         var catOrder = ["Travel", "Castles", "Medieval", "Roman", "Sylvan"];
         var extraCats = {};
         ICONS.forEach(function (ic) { if (catOrder.indexOf(ic.category) === -1) extraCats[ic.category] = true; });
@@ -2964,7 +3005,7 @@
           if (inCat.length === 0) return;
           items.push({ group: cat });
           inCat.forEach(function (ic) {
-            items.push({ label: ic.name, search: (cat + " " + ic.name).toLowerCase(), action: (function (key) { return function () { openLabelDialogForCreate(x, y, "token", key); }; })(ic.key) });
+            items.push({ label: ic.name, search: (cat + " " + ic.name).toLowerCase(), iconKey: ic.key, action: (function (key) { return function () { openLabelDialogForCreate(x, y, "token", key); }; })(ic.key) });
           });
         });
         items.push("sep");
@@ -2985,7 +3026,17 @@
         });
       }
       document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") { closeMapCtx(); return; }
+        if (e.key === "Escape") {
+          closeMapCtx();
+          if (state.pendingIconKey) {
+            state.pendingIconKey = null;
+            var armedCells = document.querySelectorAll("[data-iconcell].armed");
+            for (var ac = 0; ac < armedCells.length; ac++) { armedCells[ac].classList.remove("armed"); armedCells[ac].setAttribute("aria-pressed", "false"); }
+            var libMsg = document.getElementById("iconLibMsg");
+            if (libMsg) libMsg.textContent = "";
+          }
+          return;
+        }
         if (state.view !== "maps" || !gmIsUnlocked()) return;
         if (e.key !== "Delete" && e.key !== "Backspace") return;
         var t = e.target;
@@ -3012,6 +3063,68 @@
         visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey && p.visibility === "gm") { jobs.push(sb.from("map_pins").update({ visibility: "player" }, { returning: "minimal" }).eq("id", p.id)); p.visibility = "player"; } });
         visibleMarkers(state.mapKey).forEach(function (m) { if (m.visibility === "gm") { jobs.push(sb.from("map_markers").update({ visibility: "player" }, { returning: "minimal" }).eq("id", m.id)); m.visibility = "player"; } });
         Promise.all(jobs).then(function () { setMapMsg("Everything on this map is visible to players now."); render(); });
+      }
+      function iconLibraryHtml() {
+        var html = '<section class="icon-lib" aria-label="Icon library">'
+          + '<div class="icon-lib-head"><strong>Place an icon</strong><span class="small muted">Drag an icon straight onto the map, or tap one to arm it, then tap the map where it belongs. You can also right-click the map and pick from the list there.</span></div>';
+        if (ICONS.length === 0) {
+          html += '<p class="small muted" style="margin:0.5rem 0 0">No icons have loaded yet. You can upload one in GM Map Tools below the map.</p>';
+        } else {
+          html += '<input type="text" id="iconLibSearch" class="search-input" placeholder="Search icons by name" aria-label="Search icons by name" style="margin-top:0.5rem">'
+            + '<div class="icon-grid" id="iconLibGrid">';
+          ICONS.forEach(function (ic) {
+            var armed = state.pendingIconKey === ic.key;
+            html += '<div class="icon-cell' + (armed ? " armed" : "") + '" draggable="true" data-iconcell="' + esc(ic.key) + '" data-search="' + esc((ic.category + " " + ic.name).toLowerCase()) + '" role="button" tabindex="0" aria-pressed="' + armed + '" title="' + esc(ic.category + ": " + ic.name) + '">'
+              + '<img src="' + esc(ic.src) + '" alt="" draggable="false">'
+              + "<span>" + esc(ic.name) + "</span></div>";
+          });
+          html += "</div>"
+            + '<p class="small" id="iconLibMsg" role="status" style="margin:0.5rem 0 0">' + (state.pendingIconKey ? esc((iconName(state.pendingIconKey) || "Icon") + " is armed. Tap the map where it belongs, or tap the icon again to cancel.") : "") + "</p>";
+        }
+        return html + "</section>";
+      }
+      function wireIconLibrary(main) {
+        var search = document.getElementById("iconLibSearch");
+        if (search) search.addEventListener("input", function () {
+          var q = this.value.trim().toLowerCase();
+          var cells = main.querySelectorAll("[data-iconcell]");
+          for (var i = 0; i < cells.length; i++) {
+            cells[i].style.display = (!q || (cells[i].getAttribute("data-search") || "").indexOf(q) !== -1) ? "" : "none";
+          }
+        });
+        function setArmed(key) {
+          state.pendingIconKey = key;
+          var cells = main.querySelectorAll("[data-iconcell]");
+          for (var i = 0; i < cells.length; i++) {
+            var on = cells[i].getAttribute("data-iconcell") === key;
+            cells[i].classList.toggle("armed", on);
+            cells[i].setAttribute("aria-pressed", String(on));
+          }
+          var msg = document.getElementById("iconLibMsg");
+          if (msg) msg.textContent = key ? (iconName(key) || "Icon") + " is armed. Tap the map where it belongs, or tap the icon again to cancel." : "";
+          if (key) setMapMsg((iconName(key) || "Icon") + " armed. Tap the map where it belongs.");
+        }
+        var cells = main.querySelectorAll("[data-iconcell]");
+        for (var c = 0; c < cells.length; c++) {
+          (function (cell) {
+            var key = cell.getAttribute("data-iconcell");
+            cell.addEventListener("dragstart", function (e) {
+              state.dragIconKey = key;
+              try {
+                e.dataTransfer.setData("application/x-map-icon", key);
+                e.dataTransfer.setData("text/plain", key);
+                e.dataTransfer.effectAllowed = "copy";
+                var img = cell.querySelector("img");
+                if (img && e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(img, 22, 22);
+              } catch (err) { /* drag data unavailable; tap-to-place still works */ }
+            });
+            cell.addEventListener("dragend", function () { state.dragIconKey = null; });
+            cell.addEventListener("click", function () { setArmed(state.pendingIconKey === key ? null : key); });
+            cell.addEventListener("keydown", function (e) {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setArmed(state.pendingIconKey === key ? null : key); }
+            });
+          })(cells[c]);
+        }
       }
       function renderMaps(main) {
         var mapDef = MAPS[state.mapKey];
@@ -3047,8 +3160,9 @@
           + '<button type="button" class="ghost-btn" id="toggleLabels" aria-pressed="' + state.showLabels + '">' + (state.showLabels ? "Hide labels" : "Show labels") + "</button>"
           + "</div>";
         if (gmIsUnlocked()) {
-          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
-            + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>";
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
+            + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>"
+            + iconLibraryHtml();
         }
         html += '<div style="margin-top:0.75rem">'
           + '<div class="map-frame" id="mapFrame" role="application" tabindex="0" aria-label="Interactive map: ' + esc(mapDef.title) + '. Drag to pan, use the mouse wheel, zoom bar or pinch to zoom, arrow keys pan, plus and minus zoom.">'
@@ -3140,7 +3254,19 @@
             c.x = Math.round(x * 100) / 100; c.y = Math.round(y * 100) / 100;
             saveExtras("compass");
           },
+          onDropIcon: gmIsUnlocked() ? function (iconKey, x, y) {
+            state.dragIconKey = null;
+            state.pendingIconKey = null;
+            openLabelDialogForCreate(x, y, "token", iconKey);
+          } : null,
+          getDragIcon: function () { return state.dragIconKey || null; },
           onMapClick: gmIsUnlocked() ? function (x, y) {
+            if (state.pendingIconKey) {
+              var armedKey = state.pendingIconKey;
+              state.pendingIconKey = null;
+              openLabelDialogForCreate(x, y, "token", armedKey);
+              return true;
+            }
             if (state.mapToolMode) {
               placeToolMarker(x, y);
               return true;
@@ -3185,7 +3311,7 @@
           document.getElementById("mapFrame").scrollIntoView({ block: "nearest" });
         });
 
-        if (gmIsUnlocked()) wireMapTools(main);
+        if (gmIsUnlocked()) { wireMapTools(main); wireIconLibrary(main); }
         decorateSiteText(main);
       }
 
