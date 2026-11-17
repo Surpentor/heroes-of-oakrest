@@ -341,6 +341,13 @@
       .pin-hidden-tag { position: absolute; top: -9px; right: -14px; z-index: 4; border-radius: 999px; border: 1px solid #fff; background: var(--danger); color: #fff; padding: 0 5px; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.5; pointer-events: none; }
       .pin-list .hidden-tag { display: inline-block; border-radius: 999px; background: var(--danger); color: #fff; padding: 0 0.45rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
 
+      .pin-wrap { touch-action: none; }
+      .map-pin { touch-action: none; }
+      .map-ctx .ctx-search { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); padding: 0.5rem; font: inherit; font-size: 0.875rem; margin: 0.25rem 0; min-height: 2.25rem; }
+      .map-ctx .ctx-group, .icon-name-list .ctx-group { padding: 0.375rem 0.5rem 0.125rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gold); margin: 0; }
+      .icon-name-list { display: grid; gap: 0.25rem; max-height: 46dvh; overflow-y: auto; margin-top: 0.5rem; }
+      .icon-name-list button.ctx-item { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 4px; padding: 0.5rem; font: inherit; font-size: 0.875rem; cursor: pointer; min-height: 2.25rem; }
+      .icon-name-list button.ctx-item:hover, .icon-name-list button.ctx-item:focus-visible { background: var(--surface-alt); }
       .st-editable { outline: 2px solid var(--gold); outline-offset: 2px; cursor: pointer; }
       .img-ctrl { border: 1px dashed var(--gold); border-radius: var(--radius); background: var(--surface); padding: 0.75rem; margin-top: 1rem; }
       .frame-box { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); height: 12rem; background: var(--surface-alt); }
@@ -399,7 +406,7 @@
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
         "timeline.intro": "The whole road in order, oldest first: the deep history of Caldaryn, from the Shaping of the Peaks through the Eclipse at year 0, and on to the days of 101 AE. Moments drawn from the Chronicle link back to their entries.",
-        "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: drag pins and markers to move them, drag icons from the library onto the map to drop them, right-click the map or any item for add, rename, lock, and delete options, and press Delete to remove the selected item.",
+        "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: right-click the map (long-press on touch) and pick an icon by name to drop it, drag pins and markers to move them, right-click any item for rename, lock, hide, and delete options, and press Delete to remove the selected item.",
         "footer.sync": SYNC_SUMMARY
       };
       // Header kicker: shows the current in-world day, derived from the
@@ -700,7 +707,9 @@
         sizePreview: {},
         pendingIconKey: null,
         mapMsg: "",
-        deleteArmedKey: null
+        deleteArmedKey: null,
+        mapViews: {},
+        addHidden: false
       };
 
       // ---------- GM gate (server-side, through the get_gm_content RPC) ----------
@@ -2000,7 +2009,7 @@
         var slider = frame.querySelector("[data-zoom-slider]");
         var pct = frame.querySelector("[data-zoom-pct]");
         var vpEl = frame.querySelector("[data-vp]");
-        var scale = 1, tx = 0, ty = 0, aspect = 0.77;
+        var scale = 1, tx = 0, ty = 0, aspect = (mapDef && mapDef.aspect) || 0.77;
         var pointers = new Map();
         var panStart = null, pinchStart = null;
         var lastTap = { t: 0, x: 0, y: 0 };
@@ -2021,6 +2030,7 @@
         function applyView(s, x, y) {
           var c = clampView(s, x, y);
           scale = c.s; tx = c.x; ty = c.y;
+          if (opts.mapKey && state.mapViews) state.mapViews[opts.mapKey] = { s: scale, x: tx, y: ty };
           inner.style.transform = "translate(" + tx + "px, " + ty + "px) scale(" + scale + ")";
           for (var id in pinEls) applyElTransform(pinEls[id]);
           slider.value = Math.round(scale * 100);
@@ -2062,24 +2072,47 @@
         function dragSuppressed(key) { return lastDrag.key === key && Date.now() - lastDrag.t < 400; }
         function attachDrag(el, wrap, key, onDone) {
           el.addEventListener("pointerdown", function (ev) {
+            if (ev.pointerType === "mouse" && ev.button !== 0) return;
             ev.stopPropagation();
-            try { el.setPointerCapture(ev.pointerId); } catch (e) { /* capture unsupported */ }
+            var pid = ev.pointerId;
+            var startX = ev.clientX, startY = ev.clientY;
             var pos = null, moved = false;
             function mv(e) {
+              if (e.pointerId !== pid) return;
+              if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
+              moved = true;
+              if (e.cancelable) e.preventDefault();
               var pt = toMapCoords(e.clientX, e.clientY);
-              moved = true; pos = pt;
+              pos = pt;
               wrap.style.left = pt.x + "%"; wrap.style.top = pt.y + "%";
             }
             function up() {
-              el.removeEventListener("pointermove", mv);
-              el.removeEventListener("pointerup", up);
-              el.removeEventListener("pointercancel", up);
+              window.removeEventListener("pointermove", mv, true);
+              window.removeEventListener("pointerup", up, true);
+              window.removeEventListener("pointercancel", up, true);
               if (moved && pos) { lastDrag = { key: key, t: Date.now() }; onDone(pos.x, pos.y); }
             }
-            el.addEventListener("pointermove", mv);
-            el.addEventListener("pointerup", up);
-            el.addEventListener("pointercancel", up);
+            window.addEventListener("pointermove", mv, true);
+            window.addEventListener("pointerup", up, true);
+            window.addEventListener("pointercancel", up, true);
           });
+        }
+        function armLongPress(x, y, kind, id) {
+          if (!opts.onContextItem) return;
+          var timer = setTimeout(function () {
+            cleanup();
+            opts.onContextItem(kind, id, x, y);
+          }, 600);
+          function mv(e) { if (Math.hypot(e.clientX - x, e.clientY - y) > 10) cleanup(); }
+          function cleanup() {
+            clearTimeout(timer);
+            window.removeEventListener("pointermove", mv, true);
+            window.removeEventListener("pointerup", cleanup, true);
+            window.removeEventListener("pointercancel", cleanup, true);
+          }
+          window.addEventListener("pointermove", mv, true);
+          window.addEventListener("pointerup", cleanup, true);
+          window.addEventListener("pointercancel", cleanup, true);
         }
 
         function buildPins() {
@@ -2146,7 +2179,7 @@
           }
           var btns = layer.querySelectorAll("[data-pin]");
           for (var j = 0; j < btns.length; j++) {
-            btns[j].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+            btns[j].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); armLongPress(ev.clientX, ev.clientY, "pin", Number(this.getAttribute("data-pin"))); });
             btns[j].addEventListener("click", function (ev) {
               ev.stopPropagation();
               if (dragSuppressed("pin-" + this.getAttribute("data-pin"))) return;
@@ -2159,7 +2192,7 @@
           }
           var mbtns = layer.querySelectorAll("[data-marker]");
           for (var k = 0; k < mbtns.length; k++) {
-            mbtns[k].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+            mbtns[k].addEventListener("pointerdown", function (ev) { ev.stopPropagation(); armLongPress(ev.clientX, ev.clientY, "marker", Number(this.getAttribute("data-marker"))); });
             mbtns[k].addEventListener("click", function (ev) {
               ev.stopPropagation();
               if (dragSuppressed("marker-" + this.getAttribute("data-marker"))) return;
@@ -2196,12 +2229,30 @@
           }
         }
 
+        var panMoved = false, lastPan = { t: 0 }, bgLongPress = null;
+        function clearBgLongPress() { if (bgLongPress) { clearTimeout(bgLongPress); bgLongPress = null; } }
         frame.addEventListener("pointerdown", function (e) {
           if (e.target.closest("[data-pin],[data-marker],[data-controls],[data-compasswrap]")) return;
+          if (e.pointerType === "mouse" && e.button === 2) return;
           frame.setPointerCapture(e.pointerId);
           pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          if (pointers.size === 1) panStart = { tx: tx, ty: ty, cx: e.clientX, cy: e.clientY };
+          panMoved = false;
+          if (pointers.size === 1) {
+            panStart = { tx: tx, ty: ty, cx: e.clientX, cy: e.clientY };
+            if (opts.onContextMap) {
+              var sx = e.clientX, sy = e.clientY;
+              bgLongPress = setTimeout(function () {
+                bgLongPress = null;
+                lastPan = { t: Date.now() };
+                panStart = null;
+                pointers.clear();
+                var pt = toMapCoords(sx, sy);
+                opts.onContextMap(pt.x, pt.y, sx, sy);
+              }, 600);
+            }
+          }
           if (pointers.size === 2) {
+            clearBgLongPress();
             var vals = Array.from(pointers.values());
             pinchStart = { d: Math.hypot(vals[0].x - vals[1].x, vals[0].y - vals[1].y), scale: scale };
             panStart = null;
@@ -2218,12 +2269,21 @@
             zoomAt((vals[0].x + vals[1].x) / 2 - rect.left, (vals[0].y + vals[1].y) / 2 - rect.top, target / scale);
             return;
           }
-          if (panStart && pointers.size === 1) applyView(scale, panStart.tx + (e.clientX - panStart.cx), panStart.ty + (e.clientY - panStart.cy));
+          if (panStart && pointers.size === 1) {
+            var pdx = e.clientX - panStart.cx, pdy = e.clientY - panStart.cy;
+            if (Math.hypot(pdx, pdy) > 6) { panMoved = true; clearBgLongPress(); }
+            applyView(scale, panStart.tx + pdx, panStart.ty + pdy);
+          }
         });
         function endPointer(e) {
           pointers.delete(e.pointerId);
           if (pointers.size < 2) pinchStart = null;
-          if (pointers.size === 0) panStart = null;
+          if (pointers.size === 0) {
+            if (panMoved) lastPan = { t: Date.now() };
+            panMoved = false;
+            panStart = null;
+            clearBgLongPress();
+          }
         }
         frame.addEventListener("pointerup", endPointer);
         frame.addEventListener("pointercancel", endPointer);
@@ -2257,6 +2317,7 @@
         });
         frame.addEventListener("click", function (e) {
           if (e.target.closest("[data-pin],[data-marker],[data-controls],[data-compasswrap]")) return;
+          if (Date.now() - lastPan.t < 500) return;
           var rect = frame.getBoundingClientRect();
           if (opts.onMapClick) {
             var fs = frameSize();
@@ -2295,10 +2356,15 @@
         });
         if (img.complete && img.naturalWidth > 0) { aspect = img.naturalHeight / img.naturalWidth; }
         img.addEventListener("load", function () {
-          if (img.naturalWidth > 0) { aspect = img.naturalHeight / img.naturalWidth; fit(); }
+          if (img.naturalWidth > 0) {
+            aspect = img.naturalHeight / img.naturalWidth;
+            var sv = opts.mapKey && state.mapViews ? state.mapViews[opts.mapKey] : null;
+            if (sv) applyView(sv.s, sv.x, sv.y); else fit();
+          }
         });
         buildPins();
-        fit();
+        var savedView = opts.mapKey && state.mapViews ? state.mapViews[opts.mapKey] : null;
+        if (savedView) applyView(savedView.s, savedView.x, savedView.y); else fit();
         return {
           fit: fit,
           zoomToPoint: zoomToPoint,
@@ -2469,215 +2535,23 @@
         return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, q: null, r: null };
       }
       function mapToolsHtml() {
-        var pin = selectedPin();
-        var marker = selectedMarker();
-        var modeVerb = { party: "place the party marker", marker: "add a marker", pin: "drop a new numbered pin", location: "place a named location", token: "place a token" };
         var html = '<section aria-label="GM Map Tools" style="margin-top:2rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:1rem">'
           + '<h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">GM Map Tools</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Place pins, locations, and tokens, move the party marker, edit the selected item, upload custom icons, and add nested maps. Every unlocked pin and marker can be dragged on the map; lock an item to freeze it. Right-click the map to add items (including ones hidden from players), and right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. Set Visible to GM only to hide an item from players until you reveal it. Labels follow their item: clear the label text or switch it off to remove the on-map text.</p>'
-          + '<div class="chiprow" style="margin-top:0.75rem">'
-          + '<button type="button" class="ghost-btn" id="toolPin" aria-pressed="' + (state.mapToolMode === "pin") + '">Add pin (tap map)</button>'
-          + '<button type="button" class="ghost-btn" id="toolLocation" aria-pressed="' + (state.mapToolMode === "location") + '">Add location (tap map)</button>'
-          + '<button type="button" class="ghost-btn" id="toolToken" aria-pressed="' + (state.mapToolMode === "token") + '">Add token (tap map)</button>'
-          + '<button type="button" class="ghost-btn" id="toolParty" aria-pressed="' + (state.mapToolMode === "party") + '">' + (visibleMarkers(state.mapKey).some(function (m) { return m.kind === "party"; }) ? "Move the party marker (tap map)" : "Place the party marker") + "</button>"
-          + '<button type="button" class="ghost-btn" id="toolMarker" aria-pressed="' + (state.mapToolMode === "marker") + '">Add a marker (tap map)</button>'
-          + (state.mapKey === "caldaryn" ? '<button type="button" class="ghost-btn" id="toolSnap" aria-pressed="' + (state.snapHex !== false) + '">Snap to hexes: ' + (state.snapHex !== false ? "On" : "Off") + "</button>" : "")
-          + "</div>"
-          + (state.mapToolMode ? '<p class="small" style="margin-top:0.5rem;color:var(--teal)">Tap the map to ' + (modeVerb[state.mapToolMode] || "place the item") + (state.mapKey === "caldaryn" && state.snapHex !== false ? ", snapped to the nearest hex" : "") + ".</p>" : "");
-        if (pin) {
-          html += '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Pin ' + pin.number + ": " + esc(pin.label) + '</strong></p>'
-            + '<label class="gm-field"><span>Label</span><input type="text" id="pinLabel" class="search-input" value="' + esc(pin.label) + '"></label>'
-            + '<label class="gm-field"><span>Note</span><textarea id="pinNote" class="search-input" rows="3">' + esc(pin.note) + "</textarea></label>"
-            + '<label class="gm-field"><span>Icon</span><select id="pinIcon" class="search-input">' + iconOptionsHtml(pin.iconKey) + "</select></label>"
-            + '<label class="gm-field"><span>Link type</span><select id="pinLinkType" class="search-input"><option value="none"' + (pin.linkType === "none" ? " selected" : "") + '>None</option><option value="lore"' + (pin.linkType === "lore" ? " selected" : "") + '>Article</option><option value="map"' + (pin.linkType === "map" ? " selected" : "") + ">Map</option></select></label>"
-            + '<label class="gm-field"><span>Link key (article key or map key)</span><input type="text" id="pinLinkKey" class="search-input" value="' + esc(pin.linkKey) + '" list="loreKeyList"></label>'
-            + '<label class="gm-field"><span>Visible to</span><select id="pinVis" class="search-input"><option value="player"' + (pin.visibility !== "gm" ? " selected" : "") + '>Everyone</option><option value="gm"' + (pin.visibility === "gm" ? " selected" : "") + ">GM only</option></select></label>"
-            + '<label class="gm-field"><span>Status</span><select id="pinStatus" class="search-input"><option value="approved"' + (pin.status !== "pending" ? " selected" : "") + '>Approved</option><option value="pending"' + (pin.status === "pending" ? " selected" : "") + ">Awaiting GM approval</option></select></label>"
-            + sizeControlHtml("pin", itemSize("pin", pin.id))
-            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="pinShowLabel" aria-pressed="' + pin.showLabel + '">Label on map: ' + (pin.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="ghost-btn" id="pinLockBtn" aria-pressed="' + isLocked("pin", pin.id) + '">' + (isLocked("pin", pin.id) ? "Locked: unlock" : "Unlocked: lock") + '</button><button type="button" class="ghost-btn" id="pinHideBtn" aria-pressed="' + (pin.visibility === "gm") + '">' + (pin.visibility === "gm" ? "Hidden from players: reveal" : "Visible to players: hide") + '</button><button type="button" class="btn btn-deep" id="pinSave">Save pin</button><button type="button" class="btn btn-outline" id="pinDelete">Delete pin</button></div>'
-            + '<p class="small muted" style="margin-top:0.25rem">Drag the pin on the map to move it (while unlocked). Hiding uses the Visible to setting as well: GM only means players never see it.</p>'
-            + '<p class="small" id="pinToolMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
-        }
-        if (marker) {
-          var kindName = marker.kind === "party" ? "Party marker" : marker.kind === "token" ? "Token" : marker.kind === "location" ? "Location" : "Marker";
-          var mlink = markerLink(marker) || { type: "none", key: "" };
-          html += '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>' + kindName + "</strong> <span class=\"muted\">(" + marker.x + "%, " + marker.y + "%" + (marker.hexQ != null ? ", hex " + marker.hexQ + ", " + marker.hexR : "") + ")</span></p>"
-            + '<label class="gm-field"><span>Label</span><input type="text" id="mkLabel" class="search-input" value="' + esc(marker.label) + '"></label>'
-            + '<label class="gm-field"><span>Note</span><textarea id="mkNote" class="search-input" rows="2">' + esc(marker.note) + "</textarea></label>"
-            + '<label class="gm-field"><span>Icon</span><select id="mkIcon" class="search-input">' + iconOptionsHtml(marker.iconKey) + "</select></label>"
-            + (marker.kind === "location"
-              ? '<label class="gm-field"><span>Link type</span><select id="mkLinkType" class="search-input"><option value="none"' + (mlink.type === "none" ? " selected" : "") + '>None</option><option value="lore"' + (mlink.type === "lore" ? " selected" : "") + '>Article</option><option value="map"' + (mlink.type === "map" ? " selected" : "") + ">Map</option></select></label>"
-                + '<label class="gm-field"><span>Link key (article key or map key)</span><input type="text" id="mkLinkKey" class="search-input" value="' + esc(mlink.key) + '" list="loreKeyList"></label>'
-              : "")
-            + '<label class="gm-field"><span>Visible to</span><select id="mkVis" class="search-input"><option value="player"' + (marker.visibility !== "gm" ? " selected" : "") + '>Everyone</option><option value="gm"' + (marker.visibility === "gm" ? " selected" : "") + ">GM only</option></select></label>"
-            + sizeControlHtml("mk", itemSize("marker", marker.id))
-            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="mkShowLabel" aria-pressed="' + marker.showLabel + '">Label on map: ' + (marker.showLabel ? "Shown" : "Hidden") + '</button><button type="button" class="ghost-btn" id="mkLockBtn" aria-pressed="' + isLocked("marker", marker.id) + '">' + (isLocked("marker", marker.id) ? "Locked: unlock" : "Unlocked: lock") + '</button><button type="button" class="ghost-btn" id="mkHideBtn" aria-pressed="' + (marker.visibility === "gm") + '">' + (marker.visibility === "gm" ? "Hidden from players: reveal" : "Visible to players: hide") + '</button><button type="button" class="btn btn-deep" id="mkSave">Save ' + kindName.toLowerCase() + '</button><button type="button" class="btn btn-outline" id="mkDelete">Remove ' + kindName.toLowerCase() + "</button></div>"
-            + '<p class="small muted" style="margin-top:0.25rem">Drag it on the map to move it (while unlocked). Hiding uses the Visible to setting as well: GM only means players never see it.</p>'
-            + '<p class="small" id="mkToolMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
-        }
-        var compassCfg = compassFor(state.mapKey);
-        html += '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Compass rose</strong></p>';
-        if (!compassCfg) {
-          html += '<p class="small muted" style="margin-top:0.25rem">No compass rose on this map yet. A new one appears at the top-right corner; drag it on the map to move it.</p>'
-            + '<button type="button" class="btn btn-teal" id="compassAdd" style="margin-top:0.5rem">Add a compass rose</button>';
-        } else {
-          html += '<p class="small muted" style="margin-top:0.25rem">Drag the rose on the map to move it. Players see it only while it is on.</p>'
-            + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center"><button type="button" class="ghost-btn" id="compassToggle" aria-pressed="' + compassCfg.on + '">Compass rose: ' + (compassCfg.on ? "On" : "Off") + '</button><button type="button" class="btn btn-outline" id="compassRemove">Remove compass rose</button></div>'
-            + sizeControlHtml("compass", compassCfg.size);
-        }
-        html += '<p class="small" id="compassMsg" role="status" style="margin:0.5rem 0 0"></p></div>';
-        html += loreKeyDatalistHtml();
-        html += '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Custom icon</strong></p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Drag any unlocked pin or marker to move it; dragging keeps your zoom. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it.</p>'
+          + (state.mapKey === "caldaryn" ? '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" id="toolSnap" aria-pressed="' + (state.snapHex !== false) + '">Snap to hexes: ' + (state.snapHex !== false ? "On" : "Off") + "</button></div>" : "")
+          + '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Upload a new icon or token</strong></p>'
           + '<label class="gm-field"><span>Icon name</span><input type="text" id="iconName" class="search-input"></label>'
           + '<label class="gm-field"><span>Category</span><select id="iconCat" class="search-input"><option>Travel</option><option>Castles</option><option>Medieval</option><option>Roman</option><option>Sylvan</option></select></label>'
           + '<label class="gm-field"><span>Icon file</span><input type="file" accept="image/*" id="iconFile" class="search-input"></label>'
           + '<p class="small" id="iconMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<button type="button" class="btn btn-teal" id="iconUpload" style="margin-top:0.5rem">Upload icon</button></div>';
-        html += '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Nested map</strong></p>'
-          + '<p class="small muted" style="margin-top:0.25rem">Upload a map nested inside this one. If a pin is selected, the pin is linked to the new map, so its Open map button leads here.</p>'
-          + '<label class="gm-field"><span>Map name</span><input type="text" id="cmName" class="search-input"></label>'
-          + '<label class="gm-field"><span>Map image</span><input type="file" accept="image/*" id="cmFile" class="search-input"></label>'
-          + '<p class="small" id="cmMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<button type="button" class="btn btn-teal" id="cmUpload" style="margin-top:0.5rem">Upload nested map</button></div>';
-        html += "</section>";
+          + '<button type="button" class="btn btn-teal" id="iconUpload" style="margin-top:0.5rem">Upload icon</button></div>'
+          + "</section>";
         return html;
       }
+
       function wireMapTools(main) {
-        var party = document.getElementById("toolParty");
-        if (party) party.addEventListener("click", function () { state.mapToolMode = state.mapToolMode === "party" ? null : "party"; render(); });
-        var mk = document.getElementById("toolMarker");
-        if (mk) mk.addEventListener("click", function () { state.mapToolMode = state.mapToolMode === "marker" ? null : "marker"; render(); });
-        [["toolPin", "pin"], ["toolLocation", "location"], ["toolToken", "token"]].forEach(function (pair) {
-          var b = document.getElementById(pair[0]);
-          if (b) b.addEventListener("click", function () { state.mapToolMode = state.mapToolMode === pair[1] ? null : pair[1]; render(); });
-        });
         var snap = document.getElementById("toolSnap");
         if (snap) snap.addEventListener("click", function () { state.snapHex = state.snapHex === false ? true : false; render(); });
-        var pin = selectedPin();
-        if (pin) {
-          var showBtn = document.getElementById("pinShowLabel");
-          var showVal = pin.showLabel;
-          if (showBtn) showBtn.addEventListener("click", function () { showVal = !showVal; this.textContent = "Label on map: " + (showVal ? "Shown" : "Hidden"); this.setAttribute("aria-pressed", String(showVal)); });
-          var getPinSize = wireSizeControl("pin", function (f) {
-            state.sizePreview["pin-" + pin.id] = f;
-            if (stage) stage.refreshPins();
-          });
-          var pinLockBtn = document.getElementById("pinLockBtn");
-          if (pinLockBtn) pinLockBtn.addEventListener("click", function () { toggleItemLock("pin", pin.id); });
-          var pinHideBtn = document.getElementById("pinHideBtn");
-          if (pinHideBtn) pinHideBtn.addEventListener("click", function () { toggleItemHidden("pin", pin.id); });
-          var pinDeleteBtn = document.getElementById("pinDelete");
-          if (pinDeleteBtn) pinDeleteBtn.addEventListener("click", function () {
-            if (state.deleteArmedKey === "pin-" + pin.id) { state.deleteArmedKey = null; deleteMapItem("pin", pin.id); }
-            else { state.deleteArmedKey = "pin-" + pin.id; this.textContent = "Tap again to delete for good"; }
-          });
-          document.getElementById("pinSave").addEventListener("click", function () {
-            var msg = document.getElementById("pinToolMsg");
-            if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-            var patch = {
-              label: document.getElementById("pinLabel").value, note: document.getElementById("pinNote").value,
-              icon_key: document.getElementById("pinIcon").value || null, show_label: showVal,
-              link_type: document.getElementById("pinLinkType").value, link_key: document.getElementById("pinLinkKey").value || null,
-              visibility: document.getElementById("pinVis").value, status: document.getElementById("pinStatus").value
-            };
-            sb.from("map_pins").update(patch, { returning: "minimal" }).eq("id", pin.id).then(function (res) {
-              if (res.error) { msg.textContent = "The pin could not be saved."; return; }
-              pin.label = patch.label; pin.note = patch.note; pin.iconKey = patch.icon_key; pin.showLabel = showVal; pin.linkType = patch.link_type; pin.linkKey = patch.link_key || "";
-              pin.visibility = patch.visibility; pin.status = patch.status;
-              delete state.sizePreview["pin-" + pin.id];
-              setItemSize("pin", pin.id, getPinSize()).then(function (ok) {
-                msg.textContent = ok ? "Saved." : "The pin saved, but its size could not be saved.";
-                if (stage) stage.refreshPins();
-              });
-            });
-          });
-        }
-        var marker = selectedMarker();
-        if (marker) {
-          var mShow = marker.showLabel;
-          var mShowBtn = document.getElementById("mkShowLabel");
-          if (mShowBtn) mShowBtn.addEventListener("click", function () { mShow = !mShow; this.textContent = "Label on map: " + (mShow ? "Shown" : "Hidden"); this.setAttribute("aria-pressed", String(mShow)); });
-          var getMkSize = wireSizeControl("mk", function (f) {
-            state.sizePreview["marker-" + marker.id] = f;
-            if (stage) stage.refreshPins();
-          });
-          var mkLockBtn = document.getElementById("mkLockBtn");
-          if (mkLockBtn) mkLockBtn.addEventListener("click", function () { toggleItemLock("marker", marker.id); });
-          var mkHideBtn = document.getElementById("mkHideBtn");
-          if (mkHideBtn) mkHideBtn.addEventListener("click", function () { toggleItemHidden("marker", marker.id); });
-          document.getElementById("mkSave").addEventListener("click", function () {
-            var msg = document.getElementById("mkToolMsg");
-            if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-            var patch = {
-              label: document.getElementById("mkLabel").value, note: document.getElementById("mkNote").value,
-              icon_key: document.getElementById("mkIcon").value || null, show_label: mShow,
-              visibility: document.getElementById("mkVis").value
-            };
-            sb.from("map_markers").update(patch, { returning: "minimal" }).eq("id", marker.id).then(function (res) {
-              if (res.error) { msg.textContent = "The marker could not be saved."; return; }
-              marker.label = patch.label; marker.note = patch.note; marker.iconKey = patch.icon_key; marker.showLabel = mShow; marker.visibility = patch.visibility;
-              var jobs = [];
-              delete state.sizePreview["marker-" + marker.id];
-              jobs.push(setItemSize("marker", marker.id, getMkSize()));
-              var lt = document.getElementById("mkLinkType"), lk = document.getElementById("mkLinkKey");
-              if (lt && lk) {
-                if (lt.value !== "none" && lk.value.trim()) MAP_EXTRAS.links["marker-" + marker.id] = { type: lt.value, key: lk.value.trim() };
-                else delete MAP_EXTRAS.links["marker-" + marker.id];
-                jobs.push(saveExtras("links"));
-              }
-              Promise.all(jobs).then(function (oks) {
-                var allOk = oks.every(function (o) { return o; });
-                msg.textContent = allOk ? "Saved." : "Saved, but the size or link could not be saved.";
-                render();
-              });
-            });
-          });
-          document.getElementById("mkDelete").addEventListener("click", function () {
-            if (!sb) return;
-            if (isLocked("marker", marker.id)) { var mm = document.getElementById("mkToolMsg"); if (mm) mm.textContent = "That item is locked. Unlock it before removing it."; return; }
-            sb.from("map_markers").delete({ returning: "minimal" }).eq("id", marker.id).then(function () {
-              MARKERS = MARKERS.filter(function (m) { return m.id !== marker.id; });
-              delete MAP_EXTRAS.links["marker-" + marker.id];
-              delete MAP_EXTRAS.sizes["marker-" + marker.id];
-              saveExtras("links"); saveExtras("sizes");
-              state.selectedMarkerId = null;
-              render();
-            });
-          });
-        }
-        var compassAdd = document.getElementById("compassAdd");
-        if (compassAdd) compassAdd.addEventListener("click", function () {
-          MAP_EXTRAS.compass[state.mapKey] = { on: true, x: 93, y: 7, size: 1 };
-          saveExtras("compass").then(function () { render(); });
-        });
-        var compassToggle = document.getElementById("compassToggle");
-        if (compassToggle) compassToggle.addEventListener("click", function () {
-          var c = MAP_EXTRAS.compass[state.mapKey];
-          if (!c) return;
-          c.on = !c.on;
-          saveExtras("compass").then(function () { render(); });
-        });
-        var compassRemove = document.getElementById("compassRemove");
-        if (compassRemove) compassRemove.addEventListener("click", function () {
-          delete MAP_EXTRAS.compass[state.mapKey];
-          saveExtras("compass").then(function () { render(); });
-        });
-        if (document.getElementById("compassSize")) {
-          var compassSaveTimer = null;
-          wireSizeControl("compass", function (f) {
-            var c = MAP_EXTRAS.compass[state.mapKey];
-            if (!c) return;
-            c.size = Math.round(f * 100) / 100;
-            if (stage) stage.refreshPins();
-            if (compassSaveTimer) clearTimeout(compassSaveTimer);
-            compassSaveTimer = setTimeout(function () {
-              saveExtras("compass").then(function (ok) {
-                var m = document.getElementById("compassMsg");
-                if (m) m.textContent = ok ? "Compass size saved." : "The compass size could not be saved.";
-              });
-            }, 600);
-          });
-        }
         var iconBtn = document.getElementById("iconUpload");
         if (iconBtn) iconBtn.addEventListener("click", function () {
           var msg = document.getElementById("iconMsg");
@@ -2695,27 +2569,8 @@
             }, function () { removeStorageObject(up.path); msg.textContent = "The icon row could not be saved."; });
           }, function () { msg.textContent = "The upload failed, and nothing was saved."; });
         });
-        var cmBtn = document.getElementById("cmUpload");
-        if (cmBtn) cmBtn.addEventListener("click", function () {
-          var msg = document.getElementById("cmMsg");
-          var name = document.getElementById("cmName").value.trim();
-          var fileInput = document.getElementById("cmFile");
-          var file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-          if (!name || !file) { msg.textContent = "Give the map a name and pick its image first."; return; }
-          if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-          msg.textContent = "Uploading.";
-          uploadToStorage(file, "maps", name).then(function (up) {
-            var attachId = pin ? pin.id : null;
-            sb.from("custom_maps").insert({ name: name, image_url: up.url, storage_path: up.path, parent_map: state.mapKey, attached_pin_id: attachId, aspect: 0.77 }).select("id").then(function (res) {
-              if (res.error) { removeStorageObject(up.path); msg.textContent = "The map row could not be saved, so the uploaded file was removed."; return; }
-              var newId = res.data && res.data[0] ? res.data[0].id : null;
-              if (pin && newId) {
-                sb.from("map_pins").update({ link_type: "map", link_key: "custom-" + newId }, { returning: "minimal" }).eq("id", pin.id).then(function () { loadLive(); });
-              } else loadLive();
-            }, function () { removeStorageObject(up.path); msg.textContent = "The map row could not be saved."; });
-          }, function () { msg.textContent = "The upload failed, and nothing was saved."; });
-        });
       }
+
       function placeToolMarker(x, y) {
         if (!sb) return;
         var mode = state.mapToolMode;
@@ -2768,7 +2623,7 @@
         var old = document.getElementById("mapCtxMenu");
         if (old) old.remove();
       }
-      function openMapCtx(clientX, clientY, title, items) {
+      function openMapCtx(clientX, clientY, title, items, menuOpts) {
         closeMapCtx();
         var menu = document.createElement("div");
         menu.className = "map-ctx";
@@ -2776,10 +2631,12 @@
         menu.setAttribute("role", "menu");
         menu.setAttribute("aria-label", title);
         var html = '<p class="ctx-head">' + esc(title) + "</p>";
+        if (menuOpts && menuOpts.searchable) html += '<input type="text" class="ctx-search" placeholder="Search icons by name" aria-label="Search icons by name">';
         items.forEach(function (it, idx) {
           if (it === "sep") { html += '<hr class="ctx-sep">'; return; }
+          if (it && it.group) { html += '<p class="ctx-group" data-group="' + esc(it.group) + '">' + esc(it.group) + "</p>"; return; }
           if (it.note) { html += '<p class="ctx-note">' + esc(it.note) + "</p>"; return; }
-          html += '<button type="button" class="ctx-item' + (it.danger ? " danger" : "") + '" data-ctx="' + idx + '"' + (it.disabled ? " disabled" : "") + ">" + esc(it.label) + "</button>";
+          html += '<button type="button" class="ctx-item' + (it.danger ? " danger" : "") + '" data-ctx="' + idx + '" data-search="' + esc((it.search || it.label || "").toLowerCase()) + '"' + (it.keep ? ' data-keep="1"' : "") + (it.disabled ? " disabled" : "") + ">" + esc(it.label) + "</button>";
         });
         menu.innerHTML = html;
         document.body.appendChild(menu);
@@ -2792,12 +2649,37 @@
           closeMapCtx();
           if (it && it.action) it.action();
         });
+        var search = menu.querySelector(".ctx-search");
+        if (search) {
+          search.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+          search.addEventListener("click", function (ev) { ev.stopPropagation(); });
+          search.addEventListener("input", function () {
+            var q = this.value.trim().toLowerCase();
+            var all = menu.querySelectorAll("[data-ctx]");
+            for (var a = 0; a < all.length; a++) {
+              var b = all[a];
+              var show = !q || b.getAttribute("data-keep") === "1" || (b.getAttribute("data-search") || "").indexOf(q) !== -1;
+              b.style.display = show ? "" : "none";
+            }
+            var groups = menu.querySelectorAll("[data-group]");
+            for (var g = 0; g < groups.length; g++) {
+              var grp = groups[g], vis = !q, sib = grp.nextElementSibling;
+              while (sib && !sib.hasAttribute("data-group")) {
+                if (sib.hasAttribute("data-ctx") && sib.style.display !== "none") { vis = true; break; }
+                sib = sib.nextElementSibling;
+              }
+              grp.style.display = vis ? "" : "none";
+            }
+          });
+        } else {
+          var first = menu.querySelector("[data-ctx]:not([disabled])");
+          if (first) first.focus();
+        }
         function onDocDown(ev) { if (!menu.contains(ev.target)) { closeMapCtx(); document.removeEventListener("pointerdown", onDocDown, true); } }
         document.addEventListener("pointerdown", onDocDown, true);
         menu.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeMapCtx(); });
-        var first = menu.querySelector("[data-ctx]:not([disabled])");
-        if (first) first.focus();
       }
+
       function refreshMapView() {
         if (stage) stage.refreshPins();
         var panel = document.getElementById("pinPanel");
@@ -2892,7 +2774,6 @@
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
           + '<label class="gm-field"><span>Name shown on the map</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
-          + '<label class="gm-field"><span>Note</span><textarea id="dlgNote" class="search-input" rows="3">' + esc(item.note || "") + "</textarea></label>"
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
           + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save name</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
@@ -2903,11 +2784,11 @@
         document.getElementById("dlgSave").addEventListener("click", function () {
           var msg = document.getElementById("dlgMsg");
           if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-          var patch = { label: input.value, note: document.getElementById("dlgNote").value };
+          var patch = { label: input.value };
           var table = kind === "pin" ? "map_pins" : "map_markers";
           sb.from(table).update(patch, { returning: "minimal" }).eq("id", id).then(function (res) {
             if (res.error) { msg.textContent = "The name could not be saved."; return; }
-            item.label = patch.label; item.note = patch.note;
+            item.label = patch.label;
             wrap.remove();
             setMapMsg("Saved.");
             render();
@@ -2923,20 +2804,45 @@
         var wrap = document.createElement("div");
         wrap.className = "map-dialog-backdrop";
         wrap.id = "mapDialog";
-        var optsHtml = "";
-        ICONS.forEach(function (ic) { optsHtml += '<option value="' + esc(ic.key) + '"' + (item.iconKey === ic.key ? " selected" : "") + ">" + esc(ic.category + ": " + ic.name) + "</option>"; });
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="Change icon">'
           + "<h3>Change icon</h3>"
-          + '<label class="gm-field"><span>Icon</span><select id="dlgIcon" class="search-input"><option value="">' + (kind === "pin" ? "Numbered pin, no icon" : "Default symbol") + "</option>" + optsHtml + "</select></label>"
+          + '<input type="text" id="dlgIconSearch" class="search-input" placeholder="Search icons by name" aria-label="Search icons by name" style="margin-top:0.5rem">'
+          + '<div class="icon-name-list" id="dlgIconList"></div>'
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save icon</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
+        var list = document.getElementById("dlgIconList");
+        var html = '<button type="button" class="ctx-item" data-icon="">' + (kind === "pin" ? "Numbered pin, no icon" : "Default symbol") + "</button>";
+        var catOrder = ["Travel", "Castles", "Medieval", "Roman", "Sylvan"];
+        var extraCats = {};
+        ICONS.forEach(function (ic) { if (catOrder.indexOf(ic.category) === -1) extraCats[ic.category] = true; });
+        Object.keys(extraCats).sort().forEach(function (cc) { catOrder.push(cc); });
+        catOrder.forEach(function (cat) {
+          var inCat = ICONS.filter(function (ic) { return ic.category === cat; });
+          if (inCat.length === 0) return;
+          html += '<p class="ctx-group" data-group="' + esc(cat) + '">' + esc(cat) + "</p>";
+          inCat.forEach(function (ic) { html += '<button type="button" class="ctx-item" data-icon="' + esc(ic.key) + '">' + esc(ic.name) + "</button>"; });
+        });
+        list.innerHTML = html;
         document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
         wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) wrap.remove(); });
-        document.getElementById("dlgSave").addEventListener("click", function () {
+        var search = document.getElementById("dlgIconSearch");
+        search.addEventListener("input", function () {
+          var q = this.value.trim().toLowerCase();
+          var all = list.querySelectorAll("[data-icon]");
+          for (var i = 0; i < all.length; i++) all[i].style.display = (!q || all[i].textContent.toLowerCase().indexOf(q) !== -1) ? "" : "none";
+          var groups = list.querySelectorAll("[data-group]");
+          for (var g = 0; g < groups.length; g++) {
+            var grp = groups[g], vis = !q, sib = grp.nextElementSibling;
+            while (sib && !sib.hasAttribute("data-group")) { if (sib.hasAttribute("data-icon") && sib.style.display !== "none") { vis = true; break; } sib = sib.nextElementSibling; }
+            grp.style.display = vis ? "" : "none";
+          }
+        });
+        var pickBtns = list.querySelectorAll("[data-icon]");
+        for (var j = 0; j < pickBtns.length; j++) pickBtns[j].addEventListener("click", function () {
+          var val = this.getAttribute("data-icon") || null;
           var msg = document.getElementById("dlgMsg");
           if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-          var val = document.getElementById("dlgIcon").value || null;
           var table = kind === "pin" ? "map_pins" : "map_markers";
           sb.from(table).update({ icon_key: val }, { returning: "minimal" }).eq("id", id).then(function (res) {
             if (res.error) { msg.textContent = "The icon could not be saved."; return; }
@@ -2947,14 +2853,15 @@
           });
         });
       }
-      function createMapItemAt(x, y, mode, iconKey, startHidden) {
+
+      function createMapItemAt(x, y, mode, iconKey, startHidden, labelText) {
         if (!sb) { setMapMsg("Live sync is not connected, so nothing could be added."); return; }
         var pos = finalizePos(x, y);
         var vis = startHidden ? "gm" : "player";
         if (mode === "pin") {
           var maxNum = 0;
           DATA.pins.forEach(function (p) { if (p.mapKey === state.mapKey && p.number > maxNum) maxNum = p.number; });
-          var pinRow = { map: state.mapKey, x: pos.x, y: pos.y, label: "New pin", note: "", icon_key: iconKey || null, show_label: true, visibility: vis, status: "approved", number: maxNum + 1, link_type: "none", link_key: null };
+          var pinRow = { map: state.mapKey, x: pos.x, y: pos.y, label: labelText || "New pin", note: "", icon_key: iconKey || null, show_label: true, visibility: vis, status: "approved", number: maxNum + 1, link_type: "none", link_key: null };
           sb.from("map_pins").insert(pinRow).select("id,map,x,y,label,note,icon_key,show_label,visibility,status,number,link_type,link_key").then(function (res) {
             if (res.error || !res.data || !res.data[0]) { setMapMsg("The pin could not be added."); loadLive(); return; }
             var np = mapPinRow(res.data[0]);
@@ -2966,6 +2873,7 @@
         } else {
           var kind = mode === "location" || mode === "token" || mode === "party" ? mode : "other";
           var label = kind === "location" ? "New location" : kind === "token" ? "New token" : kind === "party" ? "The Party" : "New marker";
+          if (labelText && kind !== "party") label = labelText;
           var mkRow = { map: state.mapKey, kind: kind, x: pos.x, y: pos.y, label: label, note: "", icon_key: iconKey || (kind === "party" ? "party-token" : null), show_label: true, visibility: vis, hex_q: pos.q, hex_r: pos.r };
           sb.from("map_markers").insert(mkRow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
             if (res.error || !res.data || !res.data[0]) { setMapMsg("That item could not be added."); loadLive(); return; }
@@ -3001,6 +2909,31 @@
         }
         openMapCtx(clientX, clientY, name, items);
       }
+      function openLabelDialogForCreate(x, y, mode, iconKey) {
+        closeMapCtx();
+        var old = document.getElementById("mapDialog");
+        if (old) old.remove();
+        var wrap = document.createElement("div");
+        wrap.className = "map-dialog-backdrop";
+        wrap.id = "mapDialog";
+        var heading = mode === "pin" ? "Label the new pin" : "Label the new item";
+        wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(heading) + '">'
+          + "<h3>" + esc(heading) + "</h3>"
+          + '<label class="gm-field"><span>Label</span><input type="text" id="dlgLabelOnly" class="search-input" placeholder="Name shown on the map"></label>'
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgPlace">Place it</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+        document.body.appendChild(wrap);
+        var input = document.getElementById("dlgLabelOnly");
+        input.focus();
+        function place() {
+          var label = input.value.trim();
+          wrap.remove();
+          createMapItemAt(x, y, mode, iconKey, state.addHidden, label || null);
+        }
+        document.getElementById("dlgPlace").addEventListener("click", place);
+        input.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); place(); } });
+        document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
+        wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) wrap.remove(); });
+      }
       function openMapBgCtx(x, y, clientX, clientY) {
         if (!gmIsUnlocked()) {
           openMapCtx(clientX, clientY, MAPS[state.mapKey].title, [
@@ -3008,28 +2941,35 @@
           ]);
           return;
         }
-        function add(mode, hidden) { return function () { createMapItemAt(x, y, mode, null, hidden); }; }
         var anyLocked = false, anyHidden = false;
         visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { if (isLocked("pin", p.id)) anyLocked = true; if (p.visibility === "gm") anyHidden = true; } });
         visibleMarkers(state.mapKey).forEach(function (m) { if (isLocked("marker", m.id)) anyLocked = true; if (m.visibility === "gm") anyHidden = true; });
-        openMapCtx(clientX, clientY, "Add here", [
-          { label: "Add numbered pin here", action: add("pin", false) },
-          { label: "Add location here", action: add("location", false) },
-          { label: "Add token here", action: add("token", false) },
-          { label: "Add marker here", action: add("marker", false) },
-          { label: "Place party marker here", action: function () { state.mapToolMode = "party"; placeToolMarker(x, y); } },
-          "sep",
-          { label: "Add pin, hidden from players", action: add("pin", true) },
-          { label: "Add location, hidden from players", action: add("location", true) },
-          { label: "Add token, hidden from players", action: add("token", true) },
-          "sep",
-          { label: "Lock everything on this map", action: function () { setAllLocks(true); } },
-          { label: "Unlock everything on this map", disabled: !anyLocked, action: function () { setAllLocks(false); } },
-          { label: "Reveal everything on this map", disabled: !anyHidden, action: function () { revealAllItems(); } },
-          { label: "Fit map to screen", action: function () { if (stage) stage.fit(); } },
-          { note: "Tip: drag any unlocked pin or marker to move it. Drag an icon from the library below onto the map to drop it here. Select an item and press Delete to remove it." }
-        ]);
+        var items = [];
+        items.push({ label: state.addHidden ? "New items: hidden from players (tap to make visible)" : "New items: visible to players (tap to hide)", keep: true, action: function () { state.addHidden = !state.addHidden; openMapBgCtx(x, y, clientX, clientY); } });
+        items.push("sep");
+        items.push({ label: "Numbered pin (no icon)", search: "numbered pin", action: function () { openLabelDialogForCreate(x, y, "pin", null); } });
+        items.push({ label: "Party marker", search: "party marker", action: function () { state.mapToolMode = "party"; placeToolMarker(x, y); } });
+        var catOrder = ["Travel", "Castles", "Medieval", "Roman", "Sylvan"];
+        var extraCats = {};
+        ICONS.forEach(function (ic) { if (catOrder.indexOf(ic.category) === -1) extraCats[ic.category] = true; });
+        Object.keys(extraCats).sort().forEach(function (cc) { catOrder.push(cc); });
+        catOrder.forEach(function (cat) {
+          var inCat = ICONS.filter(function (ic) { return ic.category === cat; });
+          if (inCat.length === 0) return;
+          items.push({ group: cat });
+          inCat.forEach(function (ic) {
+            items.push({ label: ic.name, search: (cat + " " + ic.name).toLowerCase(), action: (function (key) { return function () { openLabelDialogForCreate(x, y, "token", key); }; })(ic.key) });
+          });
+        });
+        items.push("sep");
+        items.push({ label: "Lock everything on this map", keep: true, action: function () { setAllLocks(true); } });
+        items.push({ label: "Unlock everything on this map", keep: true, disabled: !anyLocked, action: function () { setAllLocks(false); } });
+        items.push({ label: "Reveal everything on this map", keep: true, disabled: !anyHidden, action: function () { revealAllItems(); } });
+        items.push({ label: "Fit map to screen", keep: true, action: function () { if (stage) stage.fit(); } });
+        items.push({ note: "Pick an icon by name to drop it here, then give it a label. Drag any unlocked item to move it." });
+        openMapCtx(clientX, clientY, "Add here", items, { searchable: ICONS.length > 10 });
       }
+
       function setAllLocks(locked) {
         visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { if (locked) MAP_EXTRAS.locks["pin-" + p.id] = true; else delete MAP_EXTRAS.locks["pin-" + p.id]; } });
         visibleMarkers(state.mapKey).forEach(function (m) { if (locked) MAP_EXTRAS.locks["marker-" + m.id] = true; else delete MAP_EXTRAS.locks["marker-" + m.id]; });
@@ -3101,8 +3041,7 @@
           + '<button type="button" class="ghost-btn" id="toggleLabels" aria-pressed="' + state.showLabels + '">' + (state.showLabels ? "Hide labels" : "Show labels") + "</button>"
           + "</div>";
         if (gmIsUnlocked()) {
-          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag any unlocked pin or marker to move it. Drag an icon from the library below onto the map, or tap an icon to arm it and then tap the map. Right-click the map to add items, or right-click any item to rename, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
-            + (state.pendingIconKey ? '<p class="small" style="margin-top:0.25rem;color:var(--teal)">Placing an icon: tap the map where it should land, or tap the icon again to cancel.</p>' : "")
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
             + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>";
         }
         html += '<div style="margin-top:0.75rem">'
@@ -3134,29 +3073,15 @@
         if (pins.length === 0) html += '<li class="small muted">No pins on this map yet.</li>';
         html += "</ol></section>";
         if (gmIsUnlocked()) html += mapToolsHtml();
-        html += '<section aria-label="Map icon library" style="margin-top:2rem"><h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">The Map Icon Library</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">The Worldographer classic sets and the drawn travel tokens, the same artwork the pins and markers use. The gold-star token is the party marker.</p>';
-        var catOrder = ["Travel", "Castles", "Medieval", "Roman", "Sylvan"];
-        var extraCats = {};
-        ICONS.forEach(function (ic) { if (catOrder.indexOf(ic.category) === -1) extraCats[ic.category] = true; });
-        Object.keys(extraCats).sort().forEach(function (cc) { catOrder.push(cc); });
-        catOrder.forEach(function (cat) {
-          var items = ICONS.filter(function (ic) { return ic.category === cat; });
-          if (items.length === 0) return;
-          html += '<h4 class="font-display" style="font-size:1rem;font-weight:600;color:var(--accent-deep);margin:1rem 0 0">' + esc(cat) + '</h4><div class="icon-grid">';
-          items.forEach(function (ic) {
-            html += '<div class="icon-cell' + (state.pendingIconKey === ic.key ? " armed" : "") + '" data-iconcell="' + esc(ic.key) + '"' + (gmIsUnlocked() ? ' draggable="true" title="Drag onto the map, or tap to arm and then tap the map"' : "") + '><img src="' + esc(ic.src) + '" alt="" loading="lazy" decoding="async"><span>' + esc(ic.name) + "</span></div>";
-          });
-          html += "</div>";
-        });
-        if (ICONS.length === 0) html += '<p class="small muted" style="margin-top:0.5rem">The icon library could not be loaded. Live sync is not connected.</p>';
-        html += "</section></div>";
+        html += "</div>";
+
         main.innerHTML = html;
 
         var panel = document.getElementById("pinPanel");
         var mPanel = document.getElementById("markerPanel");
         var stagePins = state.showPins ? pins : [];
         stage = createStage(document.getElementById("mapFrame"), mapDef, stagePins, {
+          mapKey: state.mapKey,
           getSelectedId: function () { return state.selectedPinId; },
           getSelectedMarkerId: function () { return state.selectedMarkerId; },
           getShowLabels: function () { return state.showLabels; },
@@ -3174,7 +3099,6 @@
             stage.refreshPins();
             renderPinPanel(panel);
             renderMarkerPanel(mPanel);
-            if (gmIsUnlocked()) render();
           },
           getCompass: function () { return compassFor(state.mapKey); },
           isGm: function () { return gmIsUnlocked(); },
@@ -3193,11 +3117,6 @@
           },
           onContextItem: function (kind, id, cx, cy) { openItemCtx(kind, id, cx, cy); },
           onContextMap: function (x, y, cx, cy) { openMapBgCtx(x, y, cx, cy); },
-          getDragIcon: function () { return state.pendingIconKey; },
-          onDropIcon: gmIsUnlocked() ? function (iconKey, x, y) {
-            state.pendingIconKey = null;
-            createMapItemAt(x, y, "token", iconKey, false);
-          } : null,
           onMoveMarker: function (id, x, y) {
             var m = null;
             MARKERS.forEach(function (mm) { if (mm.id === id) m = mm; });
@@ -3216,12 +3135,6 @@
             saveExtras("compass");
           },
           onMapClick: gmIsUnlocked() ? function (x, y) {
-            if (state.pendingIconKey) {
-              var ik = state.pendingIconKey;
-              state.pendingIconKey = null;
-              createMapItemAt(x, y, "token", ik, false);
-              return true;
-            }
             if (state.mapToolMode) {
               placeToolMarker(x, y);
               return true;
@@ -3264,30 +3177,8 @@
           renderMarkerPanel(mPanel);
           if (pin && stage) stage.zoomToPoint(pin.x, pin.y);
           document.getElementById("mapFrame").scrollIntoView({ block: "nearest" });
-          if (gmIsUnlocked()) render();
         });
-        var iconCells = main.querySelectorAll("[data-iconcell]");
-        for (var ic2 = 0; ic2 < iconCells.length; ic2++) {
-          iconCells[ic2].addEventListener("dragstart", function (ev) {
-            var key = this.getAttribute("data-iconcell");
-            state.pendingIconKey = key;
-            try {
-              ev.dataTransfer.setData("application/x-map-icon", key);
-              ev.dataTransfer.setData("text/plain", key);
-              ev.dataTransfer.effectAllowed = "copy";
-            } catch (err) { /* drag data unavailable; the tap-to-place path still works */ }
-          });
-          iconCells[ic2].addEventListener("dragend", function () {
-            var frame = document.getElementById("mapFrame");
-            if (frame) frame.classList.remove("drop-ready");
-          });
-          iconCells[ic2].addEventListener("click", function () {
-            if (!gmIsUnlocked()) return;
-            var key = this.getAttribute("data-iconcell");
-            state.pendingIconKey = state.pendingIconKey === key ? null : key;
-            render();
-          });
-        }
+
         if (gmIsUnlocked()) wireMapTools(main);
         decorateSiteText(main);
       }
