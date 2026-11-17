@@ -291,6 +291,8 @@
       .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; font-size: 0.875rem; margin-top: 0.75rem; }
       .crumbs button { border: 0; background: none; cursor: pointer; font: inherit; font-weight: 500; color: var(--teal); text-decoration: underline; padding: 0; min-height: 2rem; }
       .crumbs .back { margin-left: 0.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; padding: 0.25rem 0.75rem; font-size: 0.75rem; min-height: 2rem; }
+      .crumbs .crumb-current { font-weight: 600; color: var(--text); }
+      nav.site-crumbs { margin-top: 0.875rem; }
 
       /* Icon library */
       .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.75rem, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
@@ -436,6 +438,7 @@
       </div>
       <nav class="sections wrap" aria-label="Site sections" id="topnav"></nav>
     </header>
+    <nav class="crumbs site-crumbs wrap" aria-label="Breadcrumb" id="breadcrumbs"></nav>
     <main class="wrap" id="main"></main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1015,6 +1018,79 @@
           });
         }
       }
+      // ---------- Breadcrumb navigation ----------
+      // One trail under the header on every view: the section, then each
+      // level down to the page being read (a wiki article under its
+      // category, a person, a nested map under its parent maps, a
+      // submission's target). Every step but the last is a button that
+      // goes back up to that level.
+      function crumbTrail() {
+        var items = [];
+        function sectionItem(key) {
+          for (var i = 0; i < NAV.length; i++) if (NAV[i].key === key) return { label: NAV[i].label, act: "section", key: key };
+          return { label: key, act: "section", key: key };
+        }
+        var v = state.view;
+        if (v === "gmsignin") { items.push({ label: "GM Sign In", act: null }); return items; }
+        if (v === "gm") { items.push({ label: "GM", act: null }); return items; }
+        if (v === "wiki" && state.reader && state.reader.kind === "lore") {
+          var e = state.reader.entry;
+          items.push(sectionItem("wiki"));
+          if (e.category) items.push({ label: e.category, act: "wikicat", key: e.category });
+          items.push({ label: e.title, act: null });
+          return items;
+        }
+        if (v === "people" && state.reader && state.reader.kind === "person") {
+          items.push(sectionItem("people"));
+          items.push({ label: state.reader.person.name, act: null });
+          return items;
+        }
+        if (v === "maps") {
+          items.push(sectionItem("maps"));
+          var chain = [], k = state.mapKey, seen = {};
+          while (k && MAPS[k] && !seen[k]) { seen[k] = true; chain.unshift({ key: k, title: MAPS[k].title }); k = MAPS[k].parentKey; }
+          chain.forEach(function (c, i) {
+            if (i === chain.length - 1) items.push({ label: c.title, act: null });
+            else items.push({ label: c.title, act: "map", key: c.key });
+          });
+          return items;
+        }
+        if (v === "submit" && state.submitPrefill && state.submitPrefill.label) {
+          items.push(sectionItem("submit"));
+          items.push({ label: state.submitPrefill.label, act: null });
+          return items;
+        }
+        items.push(sectionItem(v));
+        return items;
+      }
+      function renderBreadcrumbs() {
+        var bar = document.getElementById("breadcrumbs");
+        if (!bar) return;
+        var items = crumbTrail();
+        var html = "";
+        items.forEach(function (it, i) {
+          if (i > 0) html += '<span aria-hidden="true" class="muted">\u203A</span>';
+          if (it.act) html += '<button type="button" data-crumb-act="' + it.act + '" data-crumb-key="' + esc(it.key || "") + '">' + esc(it.label) + "</button>";
+          else html += '<span class="crumb-current" aria-current="page">' + esc(it.label) + "</span>";
+        });
+        bar.innerHTML = html;
+        var btns = bar.querySelectorAll("[data-crumb-act]");
+        for (var i = 0; i < btns.length; i++) btns[i].addEventListener("click", function () {
+          var act = this.getAttribute("data-crumb-act"), key = this.getAttribute("data-crumb-key");
+          if (act === "map") { goMap(key); return; }
+          if (act === "wikicat") { state.reader = null; state.wikiCat = key; render(); window.scrollTo(0, 0); return; }
+          state.view = key;
+          if (key === "maps") {
+            var root = MAPS["caldaryn"] ? "caldaryn" : Object.keys(MAPS)[0];
+            if (root) state.mapKey = root;
+            state.mapStack = []; state.selectedPinId = null; state.selectedMarkerId = null; state.focusPinId = null;
+          } else {
+            state.reader = null;
+          }
+          render();
+          window.scrollTo(0, 0);
+        });
+      }
       function renderHeaderText() {
         var k = document.getElementById("siteKicker");
         if (k) k.textContent = siteText("header.kicker");
@@ -1028,6 +1104,7 @@
         var main = document.getElementById("main");
         stage = null;
         if (state.view === "gm" && !gmIsUnlocked()) state.view = "gmsignin";
+        renderBreadcrumbs();
         if (state.view === "wiki") renderWiki(main);
         else if (state.view === "primer") renderPrimer(main);
         else if (state.view === "chronicle") renderChronicle(main);
@@ -3959,20 +4036,11 @@
         }
         var pins = visiblePins().filter(function (p) { return p.mapKey === state.mapKey; });
         var markersHere = visibleMarkers(state.mapKey);
-        var crumbs = [];
-        var k = state.mapKey, seen = {};
-        while (k && MAPS[k] && !seen[k]) { seen[k] = true; crumbs.unshift({ key: k, title: MAPS[k].title }); k = MAPS[k].parentKey; }
 
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="maps.title">' + esc(stVal("maps.title", "Maps of Caldaryn")) + "</h2>"
           + '<p class="small muted" style="margin-top:0.25rem" data-st="maps.intro">' + esc(siteText("maps.intro")) + "</p>";
-        if (crumbs.length > 1) {
-          html += '<nav class="crumbs" aria-label="Map breadcrumb">';
-          crumbs.forEach(function (c, i) {
-            if (i > 0) html += '<span aria-hidden="true" class="muted">\u203A</span>';
-            if (i === crumbs.length - 1) html += '<span style="font-weight:600" aria-current="page">' + esc(c.title) + "</span>";
-            else html += '<button type="button" data-crumb="' + c.key + '">' + esc(c.title) + "</button>";
-          });
-          html += '<button type="button" class="back" id="crumbBack">Back</button></nav>';
+        if (state.mapStack.length > 0) {
+          html += '<div class="crumbs"><button type="button" class="back" id="crumbBack" style="margin-left:0">Back</button></div>';
         }
         html += '<div class="chiprow" style="margin-top:0.75rem" role="group" aria-label="Choose a map">';
         Object.keys(MAPS).forEach(function (mk) {
@@ -4108,8 +4176,6 @@
         }
         var chips = main.querySelectorAll("[data-mapchip]");
         for (var a = 0; a < chips.length; a++) chips[a].addEventListener("click", function () { goMap(this.getAttribute("data-mapchip")); });
-        var crumbBtns = main.querySelectorAll("[data-crumb]");
-        for (var b = 0; b < crumbBtns.length; b++) crumbBtns[b].addEventListener("click", function () { goMap(this.getAttribute("data-crumb")); });
         var back = document.getElementById("crumbBack");
         if (back) back.addEventListener("click", function () {
           var prev = state.mapStack[state.mapStack.length - 1];
