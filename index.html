@@ -157,6 +157,8 @@
       .tl-date { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); margin: 0; }
       .tl-card h3 { font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0.25rem 0 0; overflow-wrap: break-word; }
       .tl-excerpt { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.55; color: var(--dim); overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .tl-desc { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.55; color: var(--dim); overflow-wrap: break-word; }
+      .tl-item.history .tl-dot { background: var(--gold); }
       .tl-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
       .tl-link { border: 1px solid var(--border); background: var(--surface-alt); color: var(--text); border-radius: 999px; padding: 0.375rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; font: inherit; }
       .tl-link.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
@@ -370,7 +372,7 @@
         "hero.title": "Dawn at the Ashen Hollows",
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
-        "timeline.intro": "The road in order, oldest first, in the days of 101 AE. Every moment here comes from a Chronicle entry, and each one links back to that entry.",
+        "timeline.intro": "The whole road in order, oldest first: the deep history of Caldaryn, from the Shaping of the Peaks through the Eclipse at year 0, and on to the days of 101 AE. Moments drawn from the Chronicle link back to their entries.",
         "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it.",
         "footer.sync": SYNC_SUMMARY
       };
@@ -1376,11 +1378,93 @@
       }
 
       // ---------- Timeline ----------
-      // The Timeline holds no moments of its own. It lays the Chronicle
-      // entries out oldest first, in in-world date order, and every moment
-      // is drawn live from visibleChronicle(), so GM-only entries reach
-      // this view only through the same passcode payload as the Chronicle
-      // itself. Signed out, they are never in the data this page holds.
+      // The Timeline spine merges two sources in in-world date order,
+      // oldest first. The deep-history events below are static canon,
+      // researched from the setting notes, the vault, and WorldAnvil, and
+      // embedded here because they do not change with play; every one of
+      // them falls before 28th Greenswell, 101 AE, the earliest date in
+      // the campaign window, so nothing duplicates a Chronicle moment.
+      // The Chronicle moments are drawn live from visibleChronicle(), so
+      // GM-only entries reach this view only through the same passcode
+      // payload as the Chronicle itself. History events carry the same
+      // gmOnly flag and are gated the same way in visibleHistory().
+      // Years: BE years are negative, the Eclipse is year 0, AE years are
+      // positive. circa shows as "c.", derived dates are worded "Around".
+      var HISTORY_EVENTS = [
+        {"id": "evt-01", "year": -1200, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Foundation", "title": "The Shaping of the Peaks", "description": "Thargrim the Forgefather strikes the earth with his hammer, raising the Obsidian Peaks and establishing the Deepholds for the dwarves. The sources call this the beginning of organized civilization and divine influence among the mortal races.", "links": ["place-obsidian-peaks", "history-ages"], "gmOnly": false},
+        {"id": "evt-02", "year": -1000, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Balance", "title": "The Creation of the Veilgrove Forest", "description": "Danuviel the Skyborn plants the Veilgrove Forest, creating a sanctuary for the elves and a lasting symbol of natural harmony. The forest becomes the elven homeland and a place where the barrier between mortal and divine is thin.", "links": ["place-veilgrove", "history-creation-veilgrove"], "gmOnly": false},
+        {"id": "evt-03", "year": -750, "yearEnd": -700, "month": null, "circa": true, "derived": false, "era": "Age of Conflict", "title": "The War of Stone and Iron", "description": "Humans, under Vorgrath's influence, wage war against the dwarves to seize the iron, mithril, and gold of the Obsidian Peaks. The conflict ends with a fragile alliance between dwarves and elves, and deep divisions among the races.", "links": ["history-war-stone-iron"], "gmOnly": false},
+        {"id": "evt-04", "year": -744, "yearEnd": null, "month": "Midwinter", "circa": false, "derived": false, "era": "Age of Conflict", "title": "Elanor Brightquill writes the war chronicle", "description": "Elanor Brightquill, Royal Scribe of House Thaldrin, writes her chronicle of the War of Stone and Iron from Castle Brightwind while the war is still being fought. Her account records the Siege of Deephold, the Battle of the Stoneflow, and Danuviel's proposed truce in the Valley of Shattered Blades.", "links": ["history-war-stone-iron"], "gmOnly": false},
+        {"id": "evt-05", "year": -650, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Conflict", "title": "Oakrest founded", "description": "Oakrest is established as a frontier logging camp and outpost for human settlers at the edge of the Veilgrove Forest. It later grows into a town on lumber, metalwork, and trade with dwarves and elves.", "links": ["place-oakrest"], "gmOnly": false},
+        {"id": "evt-06", "year": -500, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Peace", "title": "The Binding of the Storm", "description": "Danuviel the Skyborn, with Ralnath's assistance, tames a cataclysmic storm and binds its essence in the Tideshadow Chasm. The containment becomes a symbol of divine unity and a brief return to order.", "links": ["history-binding-storm", "place-tideshadow-chasm"], "gmOnly": false},
+        {"id": "evt-07", "year": -500, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Peace", "title": "Oakrest grows after the Binding", "description": "After the Binding of the Storm, Oakrest grows in significance and becomes a waypoint for travelers to the Tideshadow Chasm.", "links": ["place-oakrest"], "gmOnly": false},
+        {"id": "evt-08", "year": -300, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Enlightenment", "title": "The Illumination of the Prismspire", "description": "Vaelis the Prism Warden constructs the Prismspire, a tower of crystal and light, sparking a golden age of learning, magic, and artistry.", "links": ["god-vaelis"], "gmOnly": false},
+        {"id": "evt-09", "year": -300, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Enlightenment", "title": "The Forge of Oakrest is blessed", "description": "Priests of Thargrim bless the Forge of Oakrest, transforming the town into a crafting hub.", "links": ["place-oakrest", "place-forge-oakrest"], "gmOnly": false},
+        {"id": "evt-10", "year": -200, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Age of Kinship", "title": "The Rise of the Halfling Hearth", "description": "Yelna the Hearthmother blesses Hearthhaven, transforming it into a thriving hub of community and prosperity, embodying her teachings of family and kinship. Hearthhaven is founded under that blessing.", "links": ["place-hearthhaven"], "gmOnly": false},
+        {"id": "evt-11", "year": -170, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Kinship", "title": "The Great Harvest Festival tradition begins", "description": "Hearthhaven's Great Harvest Festival tradition begins, becoming a key cultural event for the village.", "links": ["place-hearthhaven"], "gmOnly": false},
+        {"id": "evt-12", "year": -87, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Kinship", "title": "Seaward founded", "description": "Fishers seeking a safe harbor along the eastern coast found Seaward. Local lore says a divine figure appeared in a great storm to guide the first settlers to the safety of the cove.", "links": ["place-seaward"], "gmOnly": false},
+        {"id": "evt-13", "year": -85, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Kinship", "title": "Hearthhaven repels a bandit raid", "description": "Hearthhaven repels a bandit raid, solidifying its reputation as a resilient community.", "links": ["place-hearthhaven"], "gmOnly": false},
+        {"id": "evt-14", "year": -50, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Age of Kinship", "title": "The Shrine of the Hearthmother completed", "description": "The Shrine of the Hearthmother in Hearthhaven is completed, housing the Hearth Lantern as its centerpiece.", "links": ["place-hearthhaven"], "gmOnly": false},
+        {"id": "evt-15", "year": 0, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Modern Era", "title": "The Eclipse", "description": "The sun and the twin moons Lunaris and Myrieth align in an unnatural conjunction, darkening the skies and tearing a rift in reality. From the rift emerge the Outsiders Korynth, Maldrath, and Xyrrak. The Divine Family's unity fractures, temples divide, cults to the Outsiders form, uncontrolled magic spreads, and Nytheris the Veilspinner is born of the union of Vaelis and Korynth. No month or day is given for the Eclipse in any source.", "links": ["history-eclipse"], "gmOnly": false},
+        {"id": "evt-16", "year": 0, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Modern Era", "title": "Oakrest becomes a refuge", "description": "After the Eclipse, Oakrest becomes a refuge for displaced travelers and adventurers, building its reputation as a resilient and welcoming town.", "links": ["place-oakrest"], "gmOnly": false},
+        {"id": "evt-17", "year": 0, "yearEnd": null, "month": null, "circa": true, "derived": false, "era": "Modern Era", "title": "Hearthhaven becomes a haven", "description": "After the Eclipse, Hearthhaven becomes a haven for displaced travelers and pilgrims seeking Yelna's guidance.", "links": ["place-hearthhaven"], "gmOnly": false},
+        {"id": "evt-18", "year": 1, "yearEnd": null, "month": "Harvestmere", "circa": false, "derived": false, "era": "Modern Era", "title": "Lorin of Brightgale writes The Shadowed Day", "description": "Lorin of Brightgale sets down his eyewitness account of the Eclipse: midmorning stillness beneath the twin suns, Lunaris and Myrieth crossing the sun in a ring of pale fire, the voices of every god speaking at once, and the gods' workings across the land. He writes from the shadow of Veynor's Labyrinth.", "links": ["history-shadowed-day", "history-eclipse"], "gmOnly": false},
+        {"id": "evt-19", "year": 53, "yearEnd": null, "month": null, "circa": true, "derived": true, "era": "Modern Era", "title": "Lord Nethor of Solren is born", "description": "Lord Nethor of Solren is born. He is later elected Lord of Solren after a period of instability, but that election is undated.", "links": ["npc-nethor"], "gmOnly": false},
+        {"id": "evt-20", "year": 54, "yearEnd": null, "month": null, "circa": false, "derived": false, "era": "Modern Era", "title": "Ashenport founded", "description": "Ashenport, which began as a small fishing settlement south of Solren, is founded as a city. It grows on maritime trade and shipbuilding and becomes Solren's rival.", "links": ["place-ashenport"], "gmOnly": false},
+        {"id": "evt-21", "year": 86, "yearEnd": 91, "month": null, "circa": true, "derived": true, "era": "Modern Era", "title": "Sela the cloth merchant is lost near Fenwatch", "description": "Sela, a quiet, honest cloth merchant hauling cloth and household goods between Fenwatch and the northern villages, is lost about 10 to 15 years before 101 AE. His wagon is found overturned a few miles north of town, apparently fallen on by bandits, body never recovered. After a few months Fenwatch accepts he is dead, and his widow leaves with the children. The loss itself is public knowledge in Fenwatch.", "links": ["place-fenwatch", "npc-sela"], "gmOnly": false},
+        {"id": "evt-22", "year": 91, "yearEnd": null, "month": null, "circa": true, "derived": true, "era": "Modern Era", "title": "Lord Sheamus Umberland vanishes; the oak-leaf courier line begins", "description": "After the war, Lord Sheamus Umberland comes to Sylvin Coppervein in Fenwatch and asks two things: tell inquirers nothing, and provision any man bearing a simple iron token shaped like an oak leaf, asking no questions. The couriers come every 10 to 12 weeks, never the same face twice, always from the south, always departing north. Parnassus Foy has spent 20 years trying to fulfill his oath-quest to find Umberland.", "links": ["npc-lord-umberland", "npc-sylvin", "org-oak-leaf-couriers"], "gmOnly": false},
+        {"id": "evt-23", "year": 91, "yearEnd": null, "month": null, "circa": true, "derived": true, "era": "Modern Era", "title": "Roderic Vale elected Warden of Oakrest", "description": "Roderic Vale, a retired woodsman and soldier from a logger family, is elected Warden of Oakrest. Under his leadership Oakrest's trade flourishes, and he holds a fragile alliance with the Veilgrove elves.", "links": ["npc-roderic"], "gmOnly": false},
+        {"id": "evt-24", "year": 92, "yearEnd": 93, "month": null, "circa": true, "derived": true, "era": "Modern Era", "title": "First rumors of the Hallow Helm", "description": "A caravan guard from Solren tells of a wounded man who vanished during a border skirmish eight or nine years ago, then reappeared three weeks later in a black helm, fighting against his own unit. The Hallow Helm answer to one master, a dark cleric, move in silence, and come for artifacts, not gold.", "links": ["org-hallow-helm"], "gmOnly": false}
+      ];
+      for (var histSeq = 0; histSeq < HISTORY_EVENTS.length; histSeq++) HISTORY_EVENTS[histSeq].seq = histSeq;
+      // The npc- site keys name people, whose page keys are their row ids;
+      // resolve them through the person's name, the same way the rest of
+      // the site finds people.
+      var HISTORY_PERSON_KEYS = {
+        "npc-nethor": "Lord Nethor",
+        "npc-sela": "Sela",
+        "npc-lord-umberland": "Lord Sheamus Umberland",
+        "npc-sylvin": "Sylvin Coppervein",
+        "npc-roderic": "Roderic Vale"
+      };
+      function visibleHistory() {
+        var unlocked = gmIsUnlocked();
+        return HISTORY_EVENTS.filter(function (ev) { return !ev.gmOnly || unlocked; })
+          .slice().sort(function (a, b) { return (a.year - b.year) || (a.seq - b.seq); });
+      }
+      function historyYearLabel(y) {
+        if (y === 0) return "Year 0";
+        return y < 0 ? Math.abs(y) + " BE" : y + " AE";
+      }
+      function historyDateLabel(ev) {
+        var core;
+        if (ev.yearEnd != null && ev.yearEnd !== ev.year) {
+          if (ev.year < 0 && ev.yearEnd <= 0) core = Math.abs(ev.year) + "\u2013" + Math.abs(ev.yearEnd) + " BE";
+          else if (ev.year >= 0 && ev.yearEnd > 0) core = ev.year + "\u2013" + ev.yearEnd + " AE";
+          else core = historyYearLabel(ev.year) + " \u2013 " + historyYearLabel(ev.yearEnd);
+        } else {
+          core = historyYearLabel(ev.year);
+        }
+        if (core === "Year 0" && (ev.circa || ev.derived)) core = "0 AE";
+        if (ev.circa) core = "c. " + core;
+        if (ev.derived) core = "Around " + core.charAt(0).toLowerCase() + core.slice(1);
+        if (ev.month) core = ev.month + ", " + core.charAt(0).toLowerCase() + core.slice(1);
+        return core;
+      }
+      function historyLinksHtml(ev) {
+        var out = "";
+        ev.links.forEach(function (key) {
+          var lore = loreByKey(key);
+          if (lore) {
+            out += '<button type="button" class="tl-link" data-tl-lore="' + esc(lore.key) + '">Article: ' + esc(lore.title) + "</button>";
+            return;
+          }
+          var personName = HISTORY_PERSON_KEYS[key];
+          var person = personName ? personByName(personName) : null;
+          if (person) out += '<button type="button" class="tl-link" data-tl-person="' + esc(person.key) + '">' + esc(person.name) + "</button>";
+        });
+        return out ? '<div class="tl-links">' + out + "</div>" : "";
+      }
       function chronicleRelations(e) {
         var hay = (e.title + "\n" + e.body).toLowerCase();
         var loreHits = [], peopleHits = [], i, t;
@@ -1397,36 +1481,70 @@
         return { lore: loreHits.slice(0, 3), people: peopleHits.slice(0, 3) };
       }
       function renderTimeline(main) {
-        var entries = visibleChronicle().slice().sort(function (a, b) { return a.sortKey - b.sortKey; });
+        var chronEntries = visibleChronicle().slice().sort(function (a, b) { return a.sortKey - b.sortKey; });
+        var history = visibleHistory();
+        // Merge into one spine, oldest first, grouped by era. Every
+        // history event predates the campaign window, so the history
+        // groups come first in date order and the Chronicle moments
+        // follow under their own 101 AE heading.
+        var groups = [];
+        function groupFor(era) {
+          for (var gi = 0; gi < groups.length; gi++) if (groups[gi].era === era) return groups[gi];
+          var g = { era: era, items: [] };
+          groups.push(g);
+          return g;
+        }
+        history.forEach(function (ev) { groupFor(ev.era).items.push({ kind: "history", ev: ev }); });
+        if (chronEntries.length > 0) {
+          var chronGroup = groupFor("101 AE");
+          chronEntries.forEach(function (e) { chronGroup.items.push({ kind: "chron", e: e }); });
+        }
+        var total = history.length + chronEntries.length;
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title">Timeline</h2>'
           + '<p class="small muted" style="margin-top:0.25rem" data-st="timeline.intro">' + esc(siteText("timeline.intro")) + "</p>"
           + (gmIsUnlocked() ? '<p class="small" style="margin-top:0.25rem">GM signed in: the GM-only moments are shown here and marked. Signed-out visitors see the player moments only.</p>' : "")
           + syncNoticeHtml()
-          + '<p style="margin-top:1rem;text-align:center" class="small muted">' + entries.length + (entries.length === 1 ? " moment" : " moments") + " \u00B7 Year 101 AE</p>"
-          + '<div class="tl-era" aria-hidden="true"><span>101 AE</span></div>';
-        if (!chronicleTableOk && dataLoaded) {
-          html += '<p style="margin-top:2rem;text-align:center" class="muted">The timeline could not be loaded. Live sync is not connected. Try again.</p>';
-        } else if (entries.length === 0) {
-          html += '<p style="margin-top:2rem;text-align:center" class="muted">No moments yet. The Chronicle is still empty.</p>';
+          + '<p style="margin-top:1rem;text-align:center" class="small muted">' + total + (total === 1 ? " moment" : " moments") + " \u00B7 " + history.length + " of deep history" + (chronEntries.length > 0 ? " \u00B7 " + chronEntries.length + " from the Chronicle" : "") + "</p>";
+        if (dataLoaded && !chronicleTableOk) {
+          html += '<p style="margin-top:1rem;text-align:center" class="muted">The Chronicle moments could not be loaded. Live sync is not connected. The deep history below is unaffected.</p>';
+        }
+        if (total === 0) {
+          html += '<p style="margin-top:2rem;text-align:center" class="muted">No moments yet.</p>';
         } else {
-          html += '<ol class="tl-list">';
-          entries.forEach(function (e, idx) {
-            var isGm = !!e.gmOnly;
-            var rel = chronicleRelations(e);
-            html += '<li class="tl-item' + (idx % 2 === 1 ? " alt" : "") + (isGm ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
-              + '<article class="tl-card"><p class="tl-date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
-              + "<h3>" + esc(e.title) + "</h3>"
-              + '<p class="tl-excerpt">' + esc(firstPara(e.body)) + "</p>"
-              + '<div class="tl-links"><button type="button" class="tl-link primary" data-tl-chron="' + esc(e.key) + '">Read in the Chronicle</button>';
-            rel.lore.forEach(function (l) {
-              html += '<button type="button" class="tl-link" data-tl-lore="' + esc(l.key) + '">Article: ' + esc(l.title) + "</button>";
+          var altIdx = 0;
+          groups.forEach(function (g) {
+            html += '<div class="tl-era"><span>' + esc(g.era) + "</span></div>" + '<ol class="tl-list">';
+            g.items.forEach(function (item) {
+              var alt = altIdx % 2 === 1 ? " alt" : "";
+              altIdx++;
+              if (item.kind === "history") {
+                var ev = item.ev;
+                html += '<li class="tl-item history' + alt + (ev.gmOnly ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
+                  + '<article class="tl-card"><p class="tl-date">' + esc(historyDateLabel(ev)) + (ev.gmOnly ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
+                  + "<h3>" + esc(ev.title) + "</h3>"
+                  + '<p class="tl-desc">' + esc(ev.description) + "</p>"
+                  + historyLinksHtml(ev)
+                  + "</article></li>";
+              } else {
+                var e = item.e;
+                var isGm = !!e.gmOnly;
+                var rel = chronicleRelations(e);
+                html += '<li class="tl-item' + alt + (isGm ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
+                  + '<article class="tl-card"><p class="tl-date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
+                  + "<h3>" + esc(e.title) + "</h3>"
+                  + '<p class="tl-excerpt">' + esc(firstPara(e.body)) + "</p>"
+                  + '<div class="tl-links"><button type="button" class="tl-link primary" data-tl-chron="' + esc(e.key) + '">Read in the Chronicle</button>';
+                rel.lore.forEach(function (l) {
+                  html += '<button type="button" class="tl-link" data-tl-lore="' + esc(l.key) + '">Article: ' + esc(l.title) + "</button>";
+                });
+                rel.people.forEach(function (p) {
+                  html += '<button type="button" class="tl-link" data-tl-person="' + esc(p.key) + '">' + esc(p.name) + "</button>";
+                });
+                html += "</div></article></li>";
+              }
             });
-            rel.people.forEach(function (p) {
-              html += '<button type="button" class="tl-link" data-tl-person="' + esc(p.key) + '">' + esc(p.name) + "</button>";
-            });
-            html += "</div></article></li>";
+            html += "</ol>";
           });
-          html += "</ol>";
         }
         html += "</div>";
         main.innerHTML = html;
