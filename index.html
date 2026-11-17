@@ -95,10 +95,10 @@
         width: 100%; height: 100%; min-width: 0; text-align: left; cursor: pointer; font: inherit; color: inherit;
         overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0;
       }
-      .card img.thumb { flex: 0 0 auto; display: block; height: 7rem; width: 100%; object-fit: cover; }
+      .card img.thumb { flex: 0 0 auto; display: block; height: auto; aspect-ratio: 4 / 3; width: 100%; object-fit: cover; }
       .card img.thumb-tall { height: 8rem; object-position: top; }
       .card img.thumb-portrait { height: auto; aspect-ratio: 3 / 4; object-position: top; }
-      .card .thumb-placeholder { flex: 0 0 auto; position: relative; display: flex; align-items: center; justify-content: center; height: 7rem; width: 100%; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
+      .card .thumb-placeholder { flex: 0 0 auto; position: relative; display: flex; align-items: center; justify-content: center; height: auto; aspect-ratio: 4 / 3; width: 100%; background: var(--surface-alt); border-bottom: 1px solid var(--border); }
       .card .thumb-placeholder.tall { height: 8rem; }
       .card .thumb-placeholder.portrait { height: auto; aspect-ratio: 3 / 4; }
       .card .thumb-placeholder::before { content: ""; position: absolute; left: 50%; top: 50%; width: 4.5rem; height: 1px; background: var(--gold); opacity: 0.35; transform: translate(-50%, -50%); }
@@ -317,6 +317,7 @@
       .img-ctrl { border: 1px dashed var(--gold); border-radius: var(--radius); background: var(--surface); padding: 0.75rem; margin-top: 1rem; }
       .frame-box { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); height: 12rem; background: var(--surface-alt); }
       .frame-box.portrait { width: min(20rem, 100%); height: auto; aspect-ratio: 3 / 4; }
+      .frame-box.lore { width: 100%; height: auto; aspect-ratio: 4 / 3; }
       .frame-box img { width: 100%; height: 100%; display: block; }
       .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.5rem; }
       .lib-cell { display: flex; flex-direction: column; gap: 0.25rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0.375rem; font: inherit; font-size: 0.75rem; color: inherit; text-align: left; cursor: pointer; }
@@ -935,7 +936,7 @@
           + '<p class="small" style="margin:0"><strong>Cover image (GM):</strong> ' + (c ? "set, framed as stored" : "none yet") + "</p>"
           + '<div style="margin-top:0.5rem">' + libPickerHtml(target.coverImageId) + "</div>"
           + '<label class="gm-field"><span>Or upload a new image</span><input type="file" accept="image/*" data-coverfile class="search-input"></label>'
-          + '<div class="frame-box' + (kind === "person" ? " portrait" : "") + '" data-framebox style="margin-top:0.75rem;' + (c ? "" : "display:none") + '">' + (c ? framedImgHtml(c, "", noun === "article" ? target.title : target.name) : "") + "</div>"
+          + '<div class="frame-box' + (kind === "person" ? " portrait" : " lore") + '" data-framebox style="margin-top:0.75rem;' + (c ? "" : "display:none") + '">' + (c ? framedImgHtml(c, "", noun === "article" ? target.title : target.name) : "") + "</div>"
           + '<div style="display:grid;gap:0.5rem;margin-top:0.75rem">'
           + '<label class="small">Fit <select data-fit class="search-input"><option value="cover"' + (target.coverFit === "cover" ? " selected" : "") + '>Fill the frame</option><option value="contain"' + (target.coverFit === "contain" ? " selected" : "") + ">Fit whole image</option></select></label>"
           + '<label class="small">Slide across: <span data-fxval>' + num(target.coverFocalX, 50) + '%</span><input type="range" min="0" max="100" step="1" value="' + num(target.coverFocalX, 50) + '" data-fx></label>'
