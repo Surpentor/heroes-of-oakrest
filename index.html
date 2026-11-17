@@ -3,40 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" href="data:," />
     <title>Heroes of Oakrest</title>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #f4efe0;
-        --surface: #fbf8ec;
-        --surface-alt: #e7e3cc;
-        --text: #2e2417;
-        --dim: #6d6250;
-        --border: #c9bd9c;
-        --accent: #7a8a5a;
-        --accent-deep: #3f4a2e;
-        --teal: #2f6b6a;
-        --gold: #b8862b;
-        --danger: #7a2e22;
+        color-scheme: dark;
+        --bg: #12140f;
+        --surface: #1e211a;
+        --surface-alt: #2a2d23;
+        --text: #ede6cf;
+        --dim: #b3a98e;
+        --border: #454837;
+        --accent: #a8bf85;
+        --accent-deep: #d6e2b8;
+        --teal: #8ac2bf;
+        --gold: #e0b354;
+        --danger: #e09a88;
+        --shadow: rgba(0, 0, 0, 0.55);
         --radius: 6px;
         --font-display: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #1c1e18;
-          --surface: #26281f;
-          --surface-alt: #31332a;
-          --text: #ece5cd;
-          --dim: #a89e83;
-          --border: #4c4f3e;
-          --accent: #9db07c;
-          --accent-deep: #d6e2b8;
-          --teal: #7fb5b2;
-          --gold: #d9ab4a;
-          --danger: #d98a7a;
-        }
       }
       * { box-sizing: border-box; }
       html, body { overflow-x: clip; }
@@ -178,7 +164,7 @@
       .stack > * { min-width: 0; }
 
       /* Maps */
-      @keyframes pinpulse { 0% { box-shadow: 0 0 0 0 rgba(184,134,43,0.45); } 70% { box-shadow: 0 0 0 10px rgba(184,134,43,0); } 100% { box-shadow: 0 0 0 0 rgba(184,134,43,0); } }
+      @keyframes pinpulse { 0% { box-shadow: 0 0 0 0 rgba(224,179,84,0.5); } 70% { box-shadow: 0 0 0 10px rgba(224,179,84,0); } 100% { box-shadow: 0 0 0 0 rgba(224,179,84,0); } }
       @keyframes pindrop { 0% { opacity: 0; margin-top: -18px; } 60% { opacity: 1; margin-top: 2px; } 100% { opacity: 1; margin-top: 0; } }
       /* Stonetop-type numbered pins: rust diamond head with stem, bottom anchored */
       @keyframes headglow { 0% { box-shadow: 0 0 0 0 rgba(156,52,24,0.45); } 70% { box-shadow: 0 0 0 9px rgba(156,52,24,0); } 100% { box-shadow: 0 0 0 0 rgba(156,52,24,0); } }
@@ -211,7 +197,7 @@
       .pin-tip {
         position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
         max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        background: #221d13; color: #fbf7ec; border-radius: 4px; padding: 2px 8px;
+        background: #0c0e0a; color: #fbf7ec; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px;
         font-size: 11px; font-weight: 600; line-height: 1.4; pointer-events: none;
         opacity: 0; transition: opacity 0.15s ease; z-index: 6;
       }
@@ -234,13 +220,13 @@
         position: relative; display: flex; align-items: center; justify-content: center;
         height: 2rem; width: 2rem; min-height: 2rem; border-radius: 50%; border: 2px solid #fff;
         background: var(--gold); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0;
-        box-shadow: 0 1px 4px rgba(46,36,23,0.4);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.55);
         animation: pinpulse 2.6s ease-out infinite, pindrop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
         transition: filter 0.15s ease;
       }
-      .map-pin:hover, .map-pin:focus-visible { filter: brightness(1.12) drop-shadow(0 4px 5px rgba(46,36,23,0.45)); }
+      .map-pin:hover, .map-pin:focus-visible { filter: brightness(1.12) drop-shadow(0 4px 5px rgba(0,0,0,0.6)); }
       .map-pin.selected { background: var(--danger); }
-      .map-pin.art { height: 2.75rem; width: 2.75rem; min-height: 2.75rem; background: var(--surface); padding: 2px; }
+      .map-pin.art { height: 2.75rem; width: 2.75rem; min-height: 2.75rem; background: #ece5cd; padding: 2px; }
       .map-pin.art img { height: 100%; width: 100%; object-fit: contain; display: block; }
       .map-pin .badge { position: absolute; bottom: -4px; right: -4px; display: flex; align-items: center; justify-content: center; height: 18px; min-width: 18px; border-radius: 999px; border: 1px solid #fff; background: var(--gold); padding: 0 2px; font-size: 10px; font-weight: 700; color: #fff; }
       .map-label {
@@ -249,30 +235,30 @@
         border: 1px solid var(--border); border-radius: 999px;
         background: color-mix(in srgb, var(--surface) 92%, transparent);
         padding: 1px 7px; font-size: 11px; font-weight: 600; line-height: 1.35; color: var(--text);
-        box-shadow: 0 1px 3px rgba(46,36,23,0.3); pointer-events: none;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none;
       }
       .map-label.flip { left: auto; right: calc(100% + 5px); }
       .map-controls { position: absolute; left: 0.5rem; top: 0.5rem; z-index: 10; display: flex; flex-direction: column; gap: 0.5rem; }
       .ctrl-btn {
         display: flex; height: 2.75rem; width: 2.75rem; min-height: 2.75rem; align-items: center; justify-content: center;
         border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text);
-        font-size: 1.25rem; font-weight: 700; box-shadow: 0 1px 4px rgba(46,36,23,0.3); cursor: pointer; font-family: inherit;
+        font-size: 1.25rem; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,0.5); cursor: pointer; font-family: inherit;
       }
       .ctrl-btn.fit { font-size: 11px; font-weight: 600; }
       .zoombar {
         position: absolute; bottom: 0.5rem; left: 0.5rem; right: 0.5rem; z-index: 10;
         display: flex; align-items: center; gap: 0.5rem;
         border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 95%, transparent);
-        padding: 0.375rem 0.5rem 0.375rem 0.75rem; box-shadow: 0 1px 4px rgba(46,36,23,0.3);
+        padding: 0.375rem 0.5rem 0.375rem 0.75rem; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
       }
       @media (min-width: 640px) { .zoombar { right: 7.5rem; } }
       .zoombar input[type="range"] { flex: 1; height: 0.5rem; accent-color: var(--teal); }
       .zoombar .pct { width: 2.75rem; text-align: right; font-size: 0.75rem; font-weight: 600; color: var(--dim); }
-      .minimap { position: absolute; bottom: 0.5rem; right: 0.5rem; z-index: 10; width: 6rem; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 1px 4px rgba(46,36,23,0.3); display: none; }
+      .minimap { position: absolute; bottom: 0.5rem; right: 0.5rem; z-index: 10; width: 6rem; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.5); display: none; }
       @media (min-width: 640px) { .minimap { display: block; } }
       .minimap .rel { position: relative; }
       .minimap img { display: block; width: 100%; }
-      .minimap .vp { position: absolute; border: 2px solid var(--gold); background: rgba(184,134,43,0.2); }
+      .minimap .vp { position: absolute; border: 2px solid var(--gold); background: rgba(224,179,84,0.22); }
       .ghost-btn {
         border: 1px solid var(--border); background: var(--surface); color: var(--text);
         border-radius: var(--radius); padding: 0.375rem 0.75rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; font: inherit;
@@ -316,7 +302,7 @@
       @media (prefers-reduced-motion: reduce) { .map-pin, .pin-head, .pin-ring { animation: none; } }
     
       /* Map editing: context menu, locks, drag and drop */
-      .map-ctx { position: fixed; z-index: 90; min-width: 13.5rem; max-width: min(19rem, calc(100vw - 1rem)); max-height: min(70dvh, 30rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 28px rgba(34,29,19,0.35); padding: 0.375rem; }
+      .map-ctx { position: fixed; z-index: 90; min-width: 13.5rem; max-width: min(19rem, calc(100vw - 1rem)); max-height: min(70dvh, 30rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 28px rgba(0,0,0,0.6); padding: 0.375rem; }
       .map-ctx .ctx-head { padding: 0.375rem 0.5rem 0.25rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
       .map-ctx button.ctx-item { display: flex; width: 100%; align-items: center; gap: 0.5rem; border: 0; background: none; color: var(--text); text-align: left; border-radius: 4px; padding: 0.5rem; font: inherit; font-size: 0.875rem; cursor: pointer; min-height: 2.25rem; }
       .map-ctx button.ctx-item:hover, .map-ctx button.ctx-item:focus-visible { background: var(--surface-alt); }
@@ -332,8 +318,8 @@
       .icon-cell[draggable="true"] { cursor: grab; }
       .icon-cell[draggable="true"]:active { cursor: grabbing; }
       .icon-cell.armed { outline: 2px solid var(--teal); background: var(--surface-alt); }
-      .map-dialog-backdrop { position: fixed; inset: 0; z-index: 95; background: rgba(34,29,19,0.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
-      .map-dialog { width: min(26rem, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; box-shadow: 0 10px 32px rgba(34,29,19,0.4); }
+      .map-dialog-backdrop { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+      .map-dialog { width: min(26rem, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; box-shadow: 0 10px 32px rgba(0,0,0,0.65); }
       .map-dialog h3 { font-family: var(--font-display); font-size: 1.125rem; margin: 0; }
       .map-status { margin-top: 0.75rem; border: 1px solid var(--teal); border-radius: var(--radius); background: var(--surface); padding: 0.5rem 0.75rem; font-size: 0.875rem; }
       .map-status:empty { display: none; }
@@ -360,6 +346,16 @@
       .lib-cell img { width: 100%; height: 4.5rem; object-fit: cover; display: block; border-radius: 4px; }
       .lib-cell.sel { outline: 2px solid var(--teal); }
       .lib-cell span { overflow-wrap: break-word; }
+
+      /* Dark mode polish */
+      ::selection { background: var(--gold); color: #12140f; }
+      ::placeholder { color: var(--dim); opacity: 0.85; }
+      header.site { box-shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25); }
+      .card, .thread-card, .tl-card, .pin-panel, .gm-wrap, .gm-note-box { box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+      .card:hover, .thread-card:hover { border-color: var(--gold); }
+      .icon-cell img, .lib-cell img { background: #ece5cd; border-radius: 4px; }
+      input, select, textarea { accent-color: var(--gold); }
+      input[type="range"] { accent-color: var(--teal); }
     </style>
   </head>
   <body>
@@ -2416,7 +2412,7 @@
           + '<button type="button" class="close" id="pinClose" aria-label="Close pin panel">Close</button></div>'
           + (pin.status === "pending" ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:var(--gold);color:#221d13">Awaiting GM approval</span></p>' : "")
           + (gmIsUnlocked() && pin.visibility === "gm" ? '<p style="margin-top:0.5rem"><span class="gm-badge">Hidden from players</span></p>' : "")
-          + (gmIsUnlocked() && isLocked("pin", pin.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#221d13">Locked</span></p>' : "")
+          + (gmIsUnlocked() && isLocked("pin", pin.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span></p>' : "")
           + (pin.note ? '<div style="margin-top:0.375rem">' + bodyHtml(pin.note) + "</div>" : "")
           + '<div class="chiprow" style="margin-top:0.75rem">';
         if (targetMap) html += '<button type="button" class="btn btn-deep" id="pinOpenMap">Open map: ' + esc(targetMap.title) + "</button>";
@@ -2457,7 +2453,7 @@
           + '<button type="button" class="close" id="markerClose" aria-label="Close marker panel">Close</button></div>'
           + (m.kind === "party" && m.label && m.label !== "The Party" ? '<p class="small" style="margin-top:0.375rem;font-weight:500">' + esc(m.label) + "</p>" : "")
           + (gmIsUnlocked() && m.visibility === "gm" ? '<p style="margin-top:0.5rem"><span class="gm-badge">Hidden from players</span></p>' : "")
-          + (gmIsUnlocked() && isLocked("marker", m.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#221d13">Locked</span></p>' : "")
+          + (gmIsUnlocked() && isLocked("marker", m.id) ? '<p style="margin-top:0.5rem"><span class="gm-badge" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span></p>' : "")
           + (m.note ? '<div style="margin-top:0.375rem">' + bodyHtml(m.note) + "</div>" : "")
           + '<div class="chiprow" style="margin-top:0.75rem">'
           + (article ? '<button type="button" class="btn btn-teal" id="markerOpenArticle">Open article</button>' : "")
@@ -3067,7 +3063,7 @@
         pins.forEach(function (p) {
           html += '<li><button type="button" data-pinlist="' + p.id + '"><span class="num">' + p.number + '.</span> <span style="font-weight:500">' + esc(p.label) + "</span>"
             + (p.visibility === "gm" ? ' <span class="hidden-tag">Hidden</span>' : "")
-            + (isLocked("pin", p.id) ? ' <span class="hidden-tag" style="background:#221d13">Locked</span>' : "")
+            + (isLocked("pin", p.id) ? ' <span class="hidden-tag" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span>' : "")
             + (p.note ? '<span class="note">' + esc(p.note) + "</span>" : "") + "</button></li>";
         });
         if (pins.length === 0) html += '<li class="small muted">No pins on this map yet.</li>';
