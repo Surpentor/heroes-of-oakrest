@@ -173,6 +173,14 @@
       .map-pin.diamond {
         flex-direction: column; height: auto; width: auto; min-height: 0;
         border: 0; border-radius: 0; background: none; box-shadow: none; color: inherit;
+      }
+      /* The drop-in plays only on a pin's first-ever appearance (the
+         .drop-in class is added once per pin by buildPins). It must never
+         be part of the resting animation: buildPins rebuilds the pin layer
+         on every select, move, and refresh, and a resting drop animation
+         replays from opacity 0 on every rebuild, which made pins flash
+         the drop and vanish whenever anything was dragged or moved. */
+      .map-pin.diamond.drop-in {
         animation: pindrop2 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
       }
       .map-pin.diamond:hover, .map-pin.diamond:focus-visible { filter: none; }
@@ -221,8 +229,11 @@
         height: 2rem; width: 2rem; min-height: 2rem; border-radius: 50%; border: 2px solid #fff;
         background: var(--gold); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0;
         box-shadow: 0 1px 4px rgba(0,0,0,0.55);
-        animation: pinpulse 2.6s ease-out infinite, pindrop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+        animation: pinpulse 2.6s ease-out infinite;
         transition: filter 0.15s ease;
+      }
+      .map-pin.drop-in {
+        animation: pinpulse 2.6s ease-out infinite, pindrop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
       }
       .map-pin:hover, .map-pin:focus-visible { filter: brightness(1.12) drop-shadow(0 4px 5px rgba(0,0,0,0.6)); }
       .map-pin.selected { background: var(--danger); }
@@ -503,6 +514,16 @@
         if (Object.prototype.hasOwnProperty.call(SITE_TEXT, key) && SITE_TEXT[key]) return SITE_TEXT[key];
         return SITE_TEXT_DEFAULTS[key] || "";
       }
+      // Like siteText, but the caller supplies the current wording as the
+      // fallback and it is registered as the key's default on first use.
+      // This lets any wording in any view be tagged data-st and edited in
+      // GM text-edit mode without moving its text into the defaults table
+      // by hand: the text stays where it is written, a saved GM wording
+      // overrides it, and Restore original falls back to it again.
+      function stVal(key, fallback) {
+        if (!Object.prototype.hasOwnProperty.call(SITE_TEXT_DEFAULTS, key)) SITE_TEXT_DEFAULTS[key] = fallback;
+        return siteText(key);
+      }
 
       // Per-table status flags, following the Stonetop pattern. A flag is
       // true only after a successful read of that table.
@@ -623,10 +644,13 @@
         SITE_TEXT[storeKey] = JSON.stringify(MAP_EXTRAS[kind]);
         return sb.from("site_text").upsert({ text_key: storeKey, value: SITE_TEXT[storeKey], updated_by: "gm" }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
       }
-      function isLocked(kind, id) { return MAP_EXTRAS.locks[kind + "-" + id] === true; }
+      // Pins and markers start locked: an item is locked unless the GM has
+      // explicitly unlocked it (stored as false). Locking stores true.
+      // Records saved before this rule stored true for locked and nothing
+      // for unlocked; those items now start locked too, as the GM asked.
+      function isLocked(kind, id) { return MAP_EXTRAS.locks[kind + "-" + id] !== false; }
       function setLocked(kind, id, locked) {
-        if (locked) MAP_EXTRAS.locks[kind + "-" + id] = true;
-        else delete MAP_EXTRAS.locks[kind + "-" + id];
+        MAP_EXTRAS.locks[kind + "-" + id] = locked ? true : false;
         return saveExtras("locks");
       }
       function itemSize(kind, id) {
@@ -923,6 +947,11 @@
         return '<p class="small" role="status" style="margin-top:1rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:0.625rem 0.75rem">Live sync is not connected. Content loads from the live site database, and nothing is shown until it connects.</p>';
       }
       var stage = null;
+      // Pin/marker keys ("pin-12", "marker-4") that have already appeared
+      // on a map. buildPins gives the drop-in animation only to keys not
+      // yet in this set, so the drop plays once per item and never replays
+      // on the rebuilds that selection, dragging, and refreshes cause.
+      var DROP_SEEN = {};
 
       var NAV = [
         { key: "primer", label: "Primer" },
@@ -1061,6 +1090,143 @@
             render();
           }, function () { msg.textContent = "The original could not be restored. Live sync is not connected."; });
         });
+      }
+
+      // ---------- Content text editing (GM text-edit mode) ----------
+      // Site wording (data-st, above) is only half the text on the site.
+      // The rest lives in content rows: article titles and bodies, people,
+      // chronicle entries, mystery threads, and the GM secrets and notes.
+      // With Edit site text turned on, every one of those gets an editor
+      // that saves back to its own table, so in GM mode every piece of
+      // text on the site can be changed. Lore and chronicle saves also set
+      // is_hand_edited, so a later content refresh cannot overwrite them.
+      function canEditText() { return gmIsUnlocked() && !!state.siteEditMode; }
+      var CONTENT_TEXT = {
+        lore: { table: "lore_entries", noun: "Article", fields: [
+          { k: "title", label: "Title", type: "input" },
+          { k: "category", label: "Category", type: "input" },
+          { k: "body", label: "Article text", type: "area", rows: 14 }
+        ] },
+        person: { table: "people", noun: "Person", fields: [
+          { k: "name", label: "Name", type: "input" },
+          { k: "role", label: "Role", type: "input" },
+          { k: "description", label: "Description", type: "area", rows: 8 },
+          { k: "status", label: "Status", type: "input" }
+        ] },
+        chronicle: { table: "chronicle_entries", noun: "Chronicle entry", fields: [
+          { k: "date", label: "In-world date", type: "input", db: "in_world_date" },
+          { k: "title", label: "Title", type: "input" },
+          { k: "body", label: "Entry text", type: "area", rows: 10, db: "entry_text" }
+        ] },
+        thread: { table: "threads", noun: "Thread", fields: [
+          { k: "title", label: "Title", type: "input" },
+          { k: "detail", label: "Detail", type: "area", rows: 8, db: "thread_text" },
+          { k: "status", label: "Status", type: "select", options: [["open", "Open"], ["resolved", "Settled"]] }
+        ] },
+        secret: { table: "gm_secrets", noun: "GM secret", fields: [
+          { k: "title", label: "Title", type: "input" },
+          { k: "body", label: "Text", type: "area", rows: 10 }
+        ] },
+        note: { table: "gm_notes", noun: "GM note", fields: [
+          { k: "title", label: "Title", type: "input" },
+          { k: "body", label: "Text", type: "area", rows: 10, db: "note_text" }
+        ] }
+      };
+      function contentItemByKind(kind, id) {
+        var list = kind === "lore" ? visibleLore() : kind === "person" ? visiblePeople()
+          : kind === "chronicle" ? visibleChronicle() : kind === "thread" ? DATA.threads
+          : kind === "secret" ? GM.secrets : kind === "note" ? GM.notes : [];
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        return null;
+      }
+      function contentTextSectionHtml(kind, item) {
+        var cfg = CONTENT_TEXT[kind];
+        if (!cfg || !item) return "";
+        var html = '<section class="img-ctrl" aria-label="Edit text" data-ctext="' + kind + ":" + item.id + '">'
+          + '<p class="small" style="margin:0"><strong>Edit this ' + esc(cfg.noun.toLowerCase()) + "\u2019s text (GM):</strong></p>";
+        cfg.fields.forEach(function (f) {
+          if (f.type === "area") {
+            html += '<label class="gm-field"><span>' + esc(f.label) + '</span><textarea data-ctfield="' + f.k + '" class="search-input" rows="' + (f.rows || 6) + '">' + esc(item[f.k] || "") + "</textarea></label>";
+          } else if (f.type === "select") {
+            html += '<label class="gm-field"><span>' + esc(f.label) + '</span><select data-ctfield="' + f.k + '" class="search-input">';
+            f.options.forEach(function (o) { html += '<option value="' + esc(o[0]) + '"' + (item[f.k] === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>"; });
+            html += "</select></label>";
+          } else {
+            html += '<label class="gm-field"><span>' + esc(f.label) + '</span><input type="text" data-ctfield="' + f.k + '" class="search-input" value="' + esc(item[f.k] || "") + '"></label>';
+          }
+        });
+        html += '<p class="small" data-ctmsg role="status" style="margin:0.5rem 0 0"></p>'
+          + '<div style="margin-top:0.5rem"><button type="button" class="btn btn-deep" data-ctsave>Save text</button></div></section>';
+        return html;
+      }
+      function saveContentText(kind, item, section) {
+        var cfg = CONTENT_TEXT[kind];
+        var msg = section.querySelector("[data-ctmsg]");
+        if (!sb) { if (msg) msg.textContent = "Live sync is not connected, so the change cannot be saved."; return; }
+        var values = {}, patch = {};
+        cfg.fields.forEach(function (f) {
+          var el = section.querySelector('[data-ctfield="' + f.k + '"]');
+          values[f.k] = el ? el.value : (item[f.k] || "");
+          patch[f.db || f.k] = values[f.k];
+        });
+        if (kind === "lore" || kind === "chronicle") patch.is_hand_edited = true;
+        sb.from(cfg.table).update(patch, { returning: "minimal" }).eq("id", item.id).then(function (res) {
+          if (res.error) { if (msg) msg.textContent = "That text could not be saved. Live sync may not allow this edit."; return; }
+          cfg.fields.forEach(function (f) { item[f.k] = values[f.k]; });
+          var summary = cfg.fields.map(function (f) { return f.label + ": " + values[f.k]; }).join("\n\n").slice(0, 2000);
+          fileReviewItem("site_text", "Text edited: " + cfg.noun + " \u2014 " + (values.title || values.name || item.title || item.name || item.id), summary, item.key || String(item.id));
+          render();
+        }, function () { if (msg) msg.textContent = "That text could not be saved. Live sync may not allow this edit."; });
+      }
+      function wireContentTextSections(root) {
+        if (!root) return;
+        var sections = root.querySelectorAll("[data-ctext]");
+        for (var i = 0; i < sections.length; i++) {
+          (function (section) {
+            if (section.getAttribute("data-ctwired")) return;
+            section.setAttribute("data-ctwired", "1");
+            var parts = section.getAttribute("data-ctext").split(":");
+            var kind = parts[0], id = Number(parts[1]);
+            var btn = section.querySelector("[data-ctsave]");
+            if (btn) btn.addEventListener("click", function () {
+              var item = contentItemByKind(kind, id);
+              if (item) saveContentText(kind, item, section);
+            });
+          })(sections[i]);
+        }
+      }
+      function textEditBtnHtml(kind, id) {
+        if (!canEditText()) return "";
+        return '<button type="button" class="ghost-btn" data-textedit="' + kind + ":" + id + '" style="margin-top:0.5rem">Edit text</button>';
+      }
+      function wireTextEditButtons(root) {
+        if (!root) return;
+        var btns = root.querySelectorAll("[data-textedit]");
+        for (var i = 0; i < btns.length; i++) {
+          (function (btn) {
+            if (btn.getAttribute("data-tewired")) return;
+            btn.setAttribute("data-tewired", "1");
+            btn.addEventListener("click", function (ev) {
+              ev.preventDefault(); ev.stopPropagation();
+              var parts = btn.getAttribute("data-textedit").split(":");
+              openContentTextEditor(btn, parts[0], Number(parts[1]));
+            });
+          })(btns[i]);
+        }
+      }
+      function openContentTextEditor(anchor, kind, id) {
+        var item = contentItemByKind(kind, id);
+        if (!item) return;
+        var oldPanel = document.getElementById("ctEditor");
+        if (oldPanel) oldPanel.remove();
+        var holder = document.createElement("div");
+        holder.id = "ctEditor";
+        holder.innerHTML = contentTextSectionHtml(kind, item)
+          + '<div style="margin-top:0.5rem"><button type="button" class="btn btn-outline" id="ctClose">Close editor</button></div>';
+        anchor.parentNode.insertBefore(holder, anchor.nextSibling);
+        holder.scrollIntoView({ block: "nearest" });
+        wireContentTextSections(holder);
+        document.getElementById("ctClose").addEventListener("click", function () { holder.remove(); });
       }
 
       // ---------- Image controls (GM only) ----------
@@ -1249,6 +1415,7 @@
           + articleBodyHtml(e)
           + (e.sourceUrl ? '<p style="margin-top:1rem"><a href="' + esc(e.sourceUrl) + '" target="_blank" rel="noreferrer" style="font-size:0.875rem;color:var(--teal)">WorldAnvil article</a></p>' : "");
         if (gmIsUnlocked()) {
+          if (canEditText()) html += contentTextSectionHtml("lore", e);
           html += coverControlHtml("lore", e);
           html += '<section class="img-ctrl" aria-label="Images inside this article"><p class="small" style="margin:0"><strong>Images inside this article (GM):</strong> ' + figs.length + "</p>";
           figs.slice().sort(function (a, b) { return a.sortOrder - b.sortOrder || a.id - b.id; }).forEach(function (f) {
@@ -1260,6 +1427,7 @@
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
         if (gmIsUnlocked()) {
+          wireContentTextSections(main);
           wireCoverControl(main, "lore", e);
           wireFigureControls(main, e);
         }
@@ -1475,11 +1643,11 @@
       function primerViewChip(view, label) {
         return '<button type="button" class="tl-link" data-primer-view="' + esc(view) + '">' + esc(label) + "</button>";
       }
-      function primerCard(kind, name, line, chips) {
+      function primerCard(kind, name, line, chips, stKey) {
         return '<article class="primer-card">'
           + (kind ? '<p class="primer-kind">' + esc(kind) + "</p>" : "")
-          + "<h4>" + esc(name) + "</h4>"
-          + '<p class="line">' + esc(line) + "</p>"
+          + "<h4" + (stKey ? ' data-st="' + stKey + '.name"' : "") + ">" + esc(stKey ? stVal(stKey + ".name", name) : name) + "</h4>"
+          + '<p class="line"' + (stKey ? ' data-st="' + stKey + '.line"' : "") + ">" + esc(stKey ? stVal(stKey + ".line", line) : line) + "</p>"
           + (chips ? '<div class="primer-links">' + chips + "</div>" : "")
           + "</article>";
       }
@@ -1540,7 +1708,7 @@
           { date: "9th of Dawnsow", title: "The Burl, the caravan, the Hollows", line: "At Granny Widdershins\u2019 Burl, the party answers three questions standing at the door, receives a skin of warm milk for the child, and leaves owing the house a true tale, told all the way to the end. On the road they meet a caravan with a curtained litter. At dawn they stand at the lip of the Ashen Hollows. That is where you join them." }
         ];
 
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">New Player Primer</h2>'
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="primer.title">' + esc(stVal("primer.title", "New Player Primer")) + "</h2>"
           + '<div class="primer-lead"><p data-st="primer.intro">' + esc(siteText("primer.intro")) + "</p></div>"
           + syncNoticeHtml()
           + '<nav class="primer-toc" aria-label="Primer contents">'
@@ -1555,63 +1723,63 @@
           + '<button type="button" class="chip" data-primer-jump="primer-guide">How to use this site</button>'
           + "</nav>"
 
-          + '<section class="primer-section" id="primer-start" aria-label="Start here"><h3>Start here</h3>'
+          + '<section class="primer-section" id="primer-start" aria-label="Start here"><h3 data-st="primer.h.start">' + esc(stVal("primer.h.start", "Start here")) + "</h3>"
           + '<p data-st="primer.start">' + esc(siteText("primer.start")) + "</p>"
           + '<ol class="primer-steps">'
-          + "<li><strong>Read this page.</strong> It is the whole briefing: the world, the gods, the peoples, the places, and the story so far, in about ten minutes.</li>"
-          + "<li><strong>Then read the story.</strong> The Chronicle tells the campaign as it happened, newest first; the Timeline puts everything, deep history and the party\u2019s days alike, in order.</li>"
-          + "<li><strong>Then just play.</strong> The open questions are kept in Mysteries, and you do not need to solve any of them before your first session. The party is mid-road and mid-danger; joining it is the point.</li>"
+          + '<li><strong data-st="primer.step.1.lead">' + esc(stVal("primer.step.1.lead", "Read this page.")) + '</strong> <span data-st="primer.step.1.rest">' + esc(stVal("primer.step.1.rest", "It is the whole briefing: the world, the gods, the peoples, the places, and the story so far, in about ten minutes.")) + "</span></li>"
+          + '<li><strong data-st="primer.step.2.lead">' + esc(stVal("primer.step.2.lead", "Then read the story.")) + '</strong> <span data-st="primer.step.2.rest">' + esc(stVal("primer.step.2.rest", "The Chronicle tells the campaign as it happened, newest first; the Timeline puts everything, deep history and the party\u2019s days alike, in order.")) + "</span></li>"
+          + '<li><strong data-st="primer.step.3.lead">' + esc(stVal("primer.step.3.lead", "Then just play.")) + '</strong> <span data-st="primer.step.3.rest">' + esc(stVal("primer.step.3.rest", "The open questions are kept in Mysteries, and you do not need to solve any of them before your first session. The party is mid-road and mid-danger; joining it is the point.")) + "</span></li>"
           + "</ol>"
           + '<div class="tl-links">' + primerViewChip("chronicle", "The Chronicle") + primerViewChip("timeline", "The Timeline") + primerViewChip("mysteries", "Open Mysteries") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-world" aria-label="The world in one page"><h3>The world in one page</h3>'
-          + "<p>Caldaryn is the known continent: a realm of divided kingdoms, sprawling wilds, and ancient ruins whispered about in stories. Most folk live simple lives in small villages, toiling the fields and keeping to old traditions. Beyond the safety of the village walls the world is dangerous: shadowy forests, crumbling towers, wild beasts, and things older than any of them. Occasionally a merchant passes through with news. That is usually enough.</p>"
-          + "<p>Human Caldaryn is a patchwork of fiercely independent city-states, each jealous of its walls, its trade, and its gods, cooperating only when profit or danger demands it. The older peoples were here first: dwarves in their mountain Deepholds, elves in the great forest, halflings in their hearth villages. Humans arrived from another continent and have pressed into their lands ever since. Within the last hundred years the open war between humans and the demi-humans stopped; what followed is a cessation of hostilities, not a peace, and everyone old enough knows the difference.</p>"
-          + "<p>The years are counted from the Eclipse: BE before it, AE after it, the Eclipse itself year 0, and the year now is 101 AE. The year holds twelve months of thirty days on a six-day week. The party\u2019s road began in Greenswell, the planting month, and has reached Dawnsow, the growing season. Overhead turn the twin moons, Lunaris and Myrieth, and their behavior is watched closely, because the Second Eclipse prophecy says to watch it.</p>"
+          + '<section class="primer-section" id="primer-world" aria-label="The world in one page"><h3 data-st="primer.h.world">' + esc(stVal("primer.h.world", "The world in one page")) + "</h3>"
+          + '<p data-st="primer.world.1">' + esc(stVal("primer.world.1", "Caldaryn is the known continent: a realm of divided kingdoms, sprawling wilds, and ancient ruins whispered about in stories. Most folk live simple lives in small villages, toiling the fields and keeping to old traditions. Beyond the safety of the village walls the world is dangerous: shadowy forests, crumbling towers, wild beasts, and things older than any of them. Occasionally a merchant passes through with news. That is usually enough.")) + "</p>"
+          + '<p data-st="primer.world.2">' + esc(stVal("primer.world.2", "Human Caldaryn is a patchwork of fiercely independent city-states, each jealous of its walls, its trade, and its gods, cooperating only when profit or danger demands it. The older peoples were here first: dwarves in their mountain Deepholds, elves in the great forest, halflings in their hearth villages. Humans arrived from another continent and have pressed into their lands ever since. Within the last hundred years the open war between humans and the demi-humans stopped; what followed is a cessation of hostilities, not a peace, and everyone old enough knows the difference.")) + "</p>"
+          + '<p data-st="primer.world.3">' + esc(stVal("primer.world.3", "The years are counted from the Eclipse: BE before it, AE after it, the Eclipse itself year 0, and the year now is 101 AE. The year holds twelve months of thirty days on a six-day week. The party\u2019s road began in Greenswell, the planting month, and has reached Dawnsow, the growing season. Overhead turn the twin moons, Lunaris and Myrieth, and their behavior is watched closely, because the Second Eclipse prophecy says to watch it.")) + "</p>"
           + '<div class="tl-links">' + primerLoreChip("place-caldaryn") + primerLoreChip("history-calendar") + primerLoreChip("history-ages") + primerLoreChip("org-city-states") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-where" aria-label="Where you are"><h3>Where you are</h3>'
-          + "<p>The road is at dawn on the 9th of Dawnsow, Year 101 AE, the day shown at the top of every page of this site, which moves forward as the story does. The party stands at the lip of the Ashen Hollows with a newborn in arms, a cursed dagger in a pack, a wraith behind, and a zealot ahead: Naevor Athzin, to whom the party decided to bring the child. For scale, home is far behind: Oakrest to Solren is about a week on foot, or about four days by boat, and the party has walked most of that axis, and beyond, to get here.</p>"
+          + '<section class="primer-section" id="primer-where" aria-label="Where you are"><h3 data-st="primer.h.where">' + esc(stVal("primer.h.where", "Where you are")) + "</h3>"
+          + '<p data-st="primer.where.1">' + esc(stVal("primer.where.1", "The road is at dawn on the 9th of Dawnsow, Year 101 AE, the day shown at the top of every page of this site, which moves forward as the story does. The party stands at the lip of the Ashen Hollows with a newborn in arms, a cursed dagger in a pack, a wraith behind, and a zealot ahead: Naevor Athzin, to whom the party decided to bring the child. For scale, home is far behind: Oakrest to Solren is about a week on foot, or about four days by boat, and the party has walked most of that axis, and beyond, to get here.")) + "</p>"
           + '<div class="tl-links">' + primerMapChip("caldaryn") + primerMapChip("oakrest") + primerMapChip("seaward") + primerLoreChip("place-ashen-hollows") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-gods" aria-label="The Gods"><h3>The Gods</h3>'
-          + "<p>Caldaryn\u2019s counted pantheon is ten. Six are the Divine Family, the old gods of the world, who shaped its peaks and forests and squabble like any family. Three are the Outsiders, who came through the rift the Eclipse tore in year 0 and were never meant to be here. The tenth, Nytheris, was born of the Eclipse itself, one parent from each side. Beyond the ten, Seaward keeps Neriath, a demigod of the sea: not one of the counted gods, honored at her Driftwood Shrine and in the Storm Lantern Vigil, and her lore will grow if the party crosses her path.</p>"
+          + '<section class="primer-section" id="primer-gods" aria-label="The Gods"><h3 data-st="primer.h.gods">' + esc(stVal("primer.h.gods", "The Gods")) + "</h3>"
+          + '<p data-st="primer.gods.intro">' + esc(stVal("primer.gods.intro", "Caldaryn\u2019s counted pantheon is ten. Six are the Divine Family, the old gods of the world, who shaped its peaks and forests and squabble like any family. Three are the Outsiders, who came through the rift the Eclipse tore in year 0 and were never meant to be here. The tenth, Nytheris, was born of the Eclipse itself, one parent from each side. Beyond the ten, Seaward keeps Neriath, a demigod of the sea: not one of the counted gods, honored at her Driftwood Shrine and in the Storm Lantern Vigil, and her lore will grow if the party crosses her path.")) + "</p>"
           + '<div class="primer-cards">';
         gods.forEach(function (g) {
-          html += primerCard(g.kind, g.name, g.line, primerLoreChip(g.key, "Full article"));
+          html += primerCard(g.kind, g.name, g.line, primerLoreChip(g.key, "Full article"), "primer." + g.key);
         });
         html += "</div>"
           + '<div class="tl-links">' + primerLoreChip("god-neriath", "Neriath, demigod of the sea") + primerLoreChip("the-outsider-gods") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-peoples" aria-label="The peoples of Caldaryn"><h3>The peoples of Caldaryn</h3>'
-          + "<p>Four peoples share the continent openly, and others keep to its dark and hidden places. What follows is what any traveler on the road would know.</p>"
+          + '<section class="primer-section" id="primer-peoples" aria-label="The peoples of Caldaryn"><h3 data-st="primer.h.peoples">' + esc(stVal("primer.h.peoples", "The peoples of Caldaryn")) + "</h3>"
+          + '<p data-st="primer.peoples.intro">' + esc(stVal("primer.peoples.intro", "Four peoples share the continent openly, and others keep to its dark and hidden places. What follows is what any traveler on the road would know.")) + "</p>"
           + '<div class="primer-cards">';
         peoples.forEach(function (p) {
-          html += primerCard("People of Caldaryn", p.name, p.line, primerLoreChip(p.key, "Full article"));
+          html += primerCard("People of Caldaryn", p.name, p.line, primerLoreChip(p.key, "Full article"), "primer." + p.key);
         });
         html += "</div></section>"
 
-          + '<section class="primer-section" id="primer-places" aria-label="Places that matter"><h3>Places that matter</h3>'
-          + "<p>The party\u2019s road runs on one axis: Oakrest at its heart, Solren to the south, Fenwatch to the north, and the wilds off every side road. These are the names that keep coming up.</p>"
+          + '<section class="primer-section" id="primer-places" aria-label="Places that matter"><h3 data-st="primer.h.places">' + esc(stVal("primer.h.places", "Places that matter")) + "</h3>"
+          + '<p data-st="primer.places.intro">' + esc(stVal("primer.places.intro", "The party\u2019s road runs on one axis: Oakrest at its heart, Solren to the south, Fenwatch to the north, and the wilds off every side road. These are the names that keep coming up.")) + "</p>"
           + '<div class="primer-cards">';
         places.forEach(function (pl) {
-          html += primerCard(pl.kind, pl.name, pl.line, primerLoreChip(pl.key, "Full article") + (pl.map ? primerMapChip(pl.map) : ""));
+          html += primerCard(pl.kind, pl.name, pl.line, primerLoreChip(pl.key, "Full article") + (pl.map ? primerMapChip(pl.map) : ""), "primer." + pl.key);
         });
         html += "</div>"
           + '<div class="tl-links">' + primerMapChip("caldaryn", "See them all on the map of Caldaryn") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-history" aria-label="Recent history that matters"><h3>Recent history that matters</h3>'
-          + "<p>Caldaryn\u2019s deep past runs back twelve centuries and is kept in full on the Timeline. These are the pieces of it the party\u2019s story actually leans on.</p>"
+          + '<section class="primer-section" id="primer-history" aria-label="Recent history that matters"><h3 data-st="primer.h.history">' + esc(stVal("primer.h.history", "Recent history that matters")) + "</h3>"
+          + '<p data-st="primer.history.intro">' + esc(stVal("primer.history.intro", "Caldaryn\u2019s deep past runs back twelve centuries and is kept in full on the Timeline. These are the pieces of it the party\u2019s story actually leans on.")) + "</p>"
           + '<ol class="primer-beats">';
-        history.forEach(function (h) {
-          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(h.date) + '</span> <span class="b-title">' + esc(h.title) + "</span><br>" + esc(h.line)
+        history.forEach(function (h, hi) {
+          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(h.date) + '</span> <span class="b-title" data-st="primer.hist.' + hi + '.title">' + esc(stVal("primer.hist." + hi + ".title", h.title)) + '</span><br><span data-st="primer.hist.' + hi + '.line">' + esc(stVal("primer.hist." + hi + ".line", h.line)) + "</span>"
             + (h.chips ? '<span class="tl-links" style="display:flex">' + h.chips + "</span>" : "") + "</li>";
         });
         html += "</ol>"
           + '<div class="tl-links">' + primerViewChip("timeline", "The full Timeline") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-party" aria-label="The party so far"><h3>The party so far</h3>'
-          + "<p>These are the Heroes of Oakrest as the road has made them. Tap any card for the full entry.</p>";
+          + '<section class="primer-section" id="primer-party" aria-label="The party so far"><h3 data-st="primer.h.party">' + esc(stVal("primer.h.party", "The party so far")) + "</h3>"
+          + '<p data-st="primer.party.intro">' + esc(stVal("primer.party.intro", "These are the Heroes of Oakrest as the road has made them. Tap any card for the full entry.")) + "</p>";
         if (heroes.length > 0) {
           html += '<div class="grid2" style="margin-top:1rem">';
           heroes.forEach(function (p) { html += personCard(p, true); });
@@ -1622,25 +1790,25 @@
         if (companions.length > 0) {
           html += '<p style="margin-top:1.25rem">Travelling with them: ' + companions.map(function (p) { return esc(p.name); }).join(", ") + ", each with an entry of their own in People.</p>";
         }
-        html += "<p>The story, in its major beats:</p>"
+        html += '<p data-st="primer.party.beatsintro">' + esc(stVal("primer.party.beatsintro", "The story, in its major beats:")) + "</p>"
           + '<ol class="primer-beats">';
-        beats.forEach(function (b) {
-          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(b.date) + ', 101 AE</span> <span class="b-title">' + esc(b.title) + "</span><br>" + esc(b.line) + "</li>";
+        beats.forEach(function (b, bi) {
+          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(b.date) + ', 101 AE</span> <span class="b-title" data-st="primer.beat.' + bi + '.title">' + esc(stVal("primer.beat." + bi + ".title", b.title)) + '</span><br><span data-st="primer.beat.' + bi + '.line">' + esc(stVal("primer.beat." + bi + ".line", b.line)) + "</span></li>";
         });
         html += "</ol>"
-          + "<p>What the party carries into the Hollows: a newborn who must be kept unclaimed, a cursed dagger that travels with them whether they like it or not, a wraith still following, and a true tale owed to Granny\u2019s house. The full list of what is still open is kept in Mysteries.</p>"
+          + '<p data-st="primer.party.carries">' + esc(stVal("primer.party.carries", "What the party carries into the Hollows: a newborn who must be kept unclaimed, a cursed dagger that travels with them whether they like it or not, a wraith still following, and a true tale owed to Granny\u2019s house. The full list of what is still open is kept in Mysteries.")) + "</p>"
           + '<div class="tl-links">' + primerViewChip("chronicle", "The Chronicle, in full") + primerViewChip("mysteries", "Open Mysteries") + primerViewChip("people", "Everyone in People") + "</div></section>"
 
-          + '<section class="primer-section" id="primer-guide" aria-label="How to use this site"><h3>How to use this site</h3>'
+          + '<section class="primer-section" id="primer-guide" aria-label="How to use this site"><h3 data-st="primer.h.guide">' + esc(stVal("primer.h.guide", "How to use this site")) + "</h3>"
           + '<div class="primer-guide">'
-          + primerCard("", "Primer", "This page. The orientation briefing: start here whenever you need the shape of the whole thing again.", primerViewChip("primer", "You are here"))
-          + primerCard("", "Wiki", "The full lore library: every place, god, people, organization, item, and prophecy with an article, searchable and browsable by category. Everything named on this page has its full entry there.", primerViewChip("wiki", "Open the Wiki"))
-          + primerCard("", "Chronicle", "The story so far, as it happened, newest first: the session-by-session record of the campaign, Greenswell through Dawnsow.", primerViewChip("chronicle", "Open the Chronicle"))
-          + primerCard("", "Timeline", "Everything in order, oldest first: the deep history of Caldaryn from the Shaping of the Peaks through the Eclipse, and then the party\u2019s days in 101 AE, each moment linking back to its Chronicle entry or article.", primerViewChip("timeline", "Open the Timeline"))
-          + primerCard("", "People", "Everyone: the heroes, their companions of the road, and the people of Caldaryn they have met, each with a portrait and an entry.", primerViewChip("people", "Open People"))
-          + primerCard("", "Maps", "The maps of Caldaryn, Oakrest, and Seaward, with numbered pins for the places that matter. Drag to pan; zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, or a pinch. Tap a pin for its note and its article.", primerMapChip("caldaryn", "Open the maps"))
-          + primerCard("", "Mysteries", "The open threads: every question the party has not answered yet, from the wraith that follows to what became of Sela. Settled threads are kept there too, marked as settled.", primerViewChip("mysteries", "Open Mysteries"))
-          + primerCard("", "GM Sign In", "The GM\u2019s door, in the menu at the top. Some content is GM-only and sits behind a passcode; players never need it, and nothing a player needs is behind it.", "")
+          + primerCard("", "Primer", "This page. The orientation briefing: start here whenever you need the shape of the whole thing again.", primerViewChip("primer", "You are here"), "primer.guide.primer")
+          + primerCard("", "Wiki", "The full lore library: every place, god, people, organization, item, and prophecy with an article, searchable and browsable by category. Everything named on this page has its full entry there.", primerViewChip("wiki", "Open the Wiki"), "primer.guide.wiki")
+          + primerCard("", "Chronicle", "The story so far, as it happened, newest first: the session-by-session record of the campaign, Greenswell through Dawnsow.", primerViewChip("chronicle", "Open the Chronicle"), "primer.guide.chronicle")
+          + primerCard("", "Timeline", "Everything in order, oldest first: the deep history of Caldaryn from the Shaping of the Peaks through the Eclipse, and then the party\u2019s days in 101 AE, each moment linking back to its Chronicle entry or article.", primerViewChip("timeline", "Open the Timeline"), "primer.guide.timeline")
+          + primerCard("", "People", "Everyone: the heroes, their companions of the road, and the people of Caldaryn they have met, each with a portrait and an entry.", primerViewChip("people", "Open People"), "primer.guide.people")
+          + primerCard("", "Maps", "The maps of Caldaryn, Oakrest, and Seaward, with numbered pins for the places that matter. Drag to pan; zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, or a pinch. Tap a pin for its note and its article.", primerMapChip("caldaryn", "Open the maps"), "primer.guide.maps")
+          + primerCard("", "Mysteries", "The open threads: every question the party has not answered yet, from the wraith that follows to what became of Sela. Settled threads are kept there too, marked as settled.", primerViewChip("mysteries", "Open Mysteries"), "primer.guide.mysteries")
+          + primerCard("", "GM Sign In", "The GM\u2019s door, in the menu at the top. Some content is GM-only and sits behind a passcode; players never need it, and nothing a player needs is behind it.", "", "primer.guide.gm")
           + "</div></section>"
           + "</div>";
         main.innerHTML = html;
@@ -1676,7 +1844,7 @@
       // ---------- Chronicle ----------
       function renderChronicle(main) {
         var entries = visibleChronicle().slice().sort(function (a, b) { return b.sortKey - a.sortKey; });
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">The Chronicle</h2>'
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="chronicle.title">' + esc(stVal("chronicle.title", "The Chronicle")) + "</h2>"
           + '<p class="small muted" style="margin-top:0.25rem" data-st="chronicle.intro">' + esc(siteText("chronicle.intro")) + "</p>"
           + (gmIsUnlocked() ? '<p class="small" style="margin-top:0.25rem">GM signed in: the GM-only entries are shown here and marked. Signed-out visitors see the player entries only.</p>' : "")
           + syncNoticeHtml()
@@ -1684,10 +1852,11 @@
         entries.forEach(function (e) {
           var isGm = !!e.gmOnly;
           var focus = state.chronicleFocus && state.chronicleFocus === e.key;
-          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + "</li>";
+          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + textEditBtnHtml("chronicle", e.id) + "</li>";
         });
         html += "</ol></div>";
         main.innerHTML = html;
+        wireTextEditButtons(main);
         if (state.chronicleFocus) {
           var target = main.querySelector('[data-chron="' + state.chronicleFocus + '"]');
           state.chronicleFocus = null;
@@ -1819,7 +1988,7 @@
           chronEntries.forEach(function (e) { chronGroup.items.push({ kind: "chron", e: e }); });
         }
         var total = history.length + chronEntries.length;
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">Timeline</h2>'
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="timeline.title">' + esc(stVal("timeline.title", "Timeline")) + "</h2>"
           + '<p class="small muted" style="margin-top:0.25rem" data-st="timeline.intro">' + esc(siteText("timeline.intro")) + "</p>"
           + (gmIsUnlocked() ? '<p class="small" style="margin-top:0.25rem">GM signed in: the GM-only moments are shown here and marked. Signed-out visitors see the player moments only.</p>' : "")
           + syncNoticeHtml()
@@ -1840,8 +2009,8 @@
                 var ev = item.ev;
                 html += '<li class="tl-item history' + alt + (ev.gmOnly ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
                   + '<article class="tl-card"><p class="tl-date">' + esc(historyDateLabel(ev)) + (ev.gmOnly ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
-                  + "<h3>" + esc(ev.title) + "</h3>"
-                  + '<p class="tl-desc">' + esc(ev.description) + "</p>"
+                  + '<h3 data-st="history.' + ev.id + '.title">' + esc(stVal("history." + ev.id + ".title", ev.title)) + "</h3>"
+                  + '<p class="tl-desc" data-st="history.' + ev.id + '.desc">' + esc(stVal("history." + ev.id + ".desc", ev.description)) + "</p>"
                   + historyLinksHtml(ev)
                   + "</article></li>";
               } else {
@@ -1859,7 +2028,7 @@
                 rel.people.forEach(function (p) {
                   html += '<button type="button" class="tl-link" data-tl-person="' + esc(p.key) + '">' + esc(p.name) + "</button>";
                 });
-                html += "</div></article></li>";
+                html += "</div>" + textEditBtnHtml("chronicle", e.id) + "</article></li>";
               }
             });
             html += "</ol>";
@@ -1867,6 +2036,7 @@
         }
         html += "</div>";
         main.innerHTML = html;
+        wireTextEditButtons(main);
         var chronBtns = main.querySelectorAll("[data-tl-chron]");
         for (var i = 0; i < chronBtns.length; i++) chronBtns[i].addEventListener("click", function () {
           state.chronicleFocus = this.getAttribute("data-tl-chron");
@@ -1900,11 +2070,15 @@
           + (p.gmOnly ? '<p style="margin:0.5rem 0 0"><span class="gm-badge">GM only</span></p>' : "")
           + '<hr class="rule">'
           + bodyHtml(p.description);
-        if (gmIsUnlocked()) html += coverControlHtml("person", p);
+        if (gmIsUnlocked()) {
+          if (canEditText()) html += contentTextSectionHtml("person", p);
+          html += coverControlHtml("person", p);
+        }
         html += "</article>";
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
-        if (gmIsUnlocked()) wireCoverControl(main, "person", p);
+        if (gmIsUnlocked()) { wireContentTextSections(main); wireCoverControl(main, "person", p); }
+        decorateSiteText(main);
       }
       function renderPeople(main) {
         if (state.reader && state.reader.kind === "person") { renderPersonReader(main, state.reader.person); return; }
@@ -1913,18 +2087,18 @@
           return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.role.toLowerCase().indexOf(q) !== -1 || p.description.toLowerCase().indexOf(q) !== -1;
         });
         var groups = [
-          { title: "The Heroes", items: list.filter(function (p) { return p.kind === "pc"; }) },
-          { title: "Companions of the Road", items: list.filter(function (p) { return p.kind === "companion"; }) },
-          { title: "People of Caldaryn", items: list.filter(function (p) { return p.kind === "npc"; }) }
+          { title: stVal("people.group.pc", "The Heroes"), stKey: "people.group.pc", items: list.filter(function (p) { return p.kind === "pc"; }) },
+          { title: stVal("people.group.companion", "Companions of the Road"), stKey: "people.group.companion", items: list.filter(function (p) { return p.kind === "companion"; }) },
+          { title: stVal("people.group.npc", "People of Caldaryn"), stKey: "people.group.npc", items: list.filter(function (p) { return p.kind === "npc"; }) }
         ];
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">People</h2>'
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="people.title">' + esc(stVal("people.title", "People")) + "</h2>"
           + syncNoticeHtml()
           + '<label style="display:block;margin-top:0.75rem"><span class="sr-only">Search people</span>'
           + '<input type="search" id="peopleSearch" class="search-input" placeholder="Search people\u2026" value="' + esc(state.peopleQ) + '"></label>';
         groups.forEach(function (g) {
           if (g.items.length === 0) return;
-          html += '<section style="margin-top:1.75rem"><h3 class="font-display" style="font-size:1.25rem;font-weight:600;color:var(--accent-deep);margin:0">'
-            + g.title + ' <span class="small" style="font-weight:400;color:var(--dim)">(' + g.items.length + ")</span></h3>"
+          html += '<section style="margin-top:1.75rem"><h3 class="font-display" style="font-size:1.25rem;font-weight:600;color:var(--accent-deep);margin:0" data-st="' + g.stKey + '">'
+            + esc(g.title) + ' <span class="small" style="font-weight:400;color:var(--dim)">(' + g.items.length + ")</span></h3>"
             + '<div class="grid2" style="margin-top:0.75rem">';
           g.items.forEach(function (p) { html += personCard(p, true); });
           html += "</div></section>";
@@ -1945,6 +2119,7 @@
           renderFooterOnly(main);
         });
         wireCards(main);
+        decorateSiteText(main);
       }
     </script>
 
@@ -2085,12 +2260,12 @@
           + '<div class="gm-note-box"><p style="margin:0"><strong>Read this first: what this gate is.</strong></p>'
           + '<p style="margin:0.5rem 0 0">This gate is now a real server-side gate. GM content is never in this page file and is never sent to the browser until the passcode checks out on the server, through the get_gm_content check. While signed out, this page holds no GM secrets, no GM chronicle entries, no GM people, and no review items, in what it shows or in its source. The payload is kept in memory only for this sitting, and signing out or closing the tab clears it.</p></div>';
         html += '<section aria-label="Site text" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Site Text</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Turn on Edit site text, then click any gold-outlined wording anywhere on the site to change it. Changes save at once, players see them right away, and each change is recorded below under Site Text Changes. Restore original returns a wording to its first text.</p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Turn on Edit site text, and every piece of text on the site becomes editable. Click any gold-outlined wording (headings, introductions, the Primer, the deep-history moments, and the site\u2019s own phrases) to change it where it stands. Articles, people, chronicle entries, mystery threads, and the GM secrets and notes below get an Edit text form or button that saves to the entry itself, and map pins and markers take text edits from their panels and right-click menus. Changes save at once, players see them right away, and each change is recorded below under Site Text Changes. Restore original returns a wording to its first text.</p>'
           + '<button type="button" class="btn ' + (state.siteEditMode ? "btn-deep" : "btn-outline") + '" id="gmEditTextToggle" aria-pressed="' + state.siteEditMode + '">' + (state.siteEditMode ? "Stop editing site text" : "Edit site text") + "</button></section>";
         html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">GM Secrets</h3><div class="stack" style="margin-top:0.75rem">';
         if (GM.secrets.length === 0) html += '<p class="small muted">No GM secrets were returned. Live sync may not be connected, or none are filed yet.</p>';
         GM.secrets.forEach(function (s) {
-          html += '<article class="gm-secret-card"><h4>' + esc(s.title) + "</h4>" + bodyHtml(s.body) + "</article>";
+          html += '<article class="gm-secret-card"><h4>' + esc(s.title) + "</h4>" + bodyHtml(s.body) + textEditBtnHtml("secret", s.id) + "</article>";
         });
         html += "</div>";
         html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">GM People</h3>'
@@ -2101,7 +2276,7 @@
         html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">The GM Chronicle Entries</h3>'
           + '<p class="small muted" style="margin-top:0.25rem">These entries complete the full chronicle. While the GM is signed in they also appear in the Chronicle, in story order and marked GM only.</p><ol class="timeline">';
         GM.chronicle.slice().sort(function (a, b) { return b.sortKey - a.sortKey; }).forEach(function (e) {
-          html += '<li><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + ' \u00B7 <span class="gm-badge">GM only</span></p><h3 style="font-family:var(--font-display);font-size:1.125rem;font-weight:600;margin:0.125rem 0 0.375rem">' + esc(e.title) + "</h3>" + bodyHtml(e.body) + "</li>";
+          html += '<li><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + ' \u00B7 <span class="gm-badge">GM only</span></p><h3 style="font-family:var(--font-display);font-size:1.125rem;font-weight:600;margin:0.125rem 0 0.375rem">' + esc(e.title) + "</h3>" + bodyHtml(e.body) + textEditBtnHtml("chronicle", e.id) + "</li>";
         });
         html += "</ol>";
         if (GM.lore.length > 0) {
@@ -2113,7 +2288,7 @@
         html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">GM Notes</h3><div class="stack" style="margin-top:0.75rem">';
         if (GM.notes.length === 0) html += '<p class="small muted">No GM notes were returned.</p>';
         GM.notes.forEach(function (n) {
-          html += '<article class="thread-card"><h4>' + esc(n.title) + "</h4>" + bodyHtml(n.body) + "</article>";
+          html += '<article class="thread-card"><h4>' + esc(n.title) + "</h4>" + bodyHtml(n.body) + textEditBtnHtml("note", n.id) + "</article>";
         });
         html += "</div>";
         html += '<section aria-label="Review queue" style="margin-top:2rem"><h3 class="font-display" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Review Queue</h3>'
@@ -2238,6 +2413,7 @@
           GM = { chronicle: [], people: [], lore: [], secrets: [], notes: [], review: [] };
           state.view = "wiki"; state.reader = null; render(); window.scrollTo(0, 0);
         });
+        wireTextEditButtons(main);
         decorateSiteText(main);
       }
 
@@ -2245,21 +2421,23 @@
       function renderMysteries(main) {
         var open = DATA.threads.filter(function (t) { return t.status === "open"; });
         var done = DATA.threads.filter(function (t) { return t.status === "resolved"; });
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">Open Threads and Mysteries</h2>' + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
         open.forEach(function (t) {
-          html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + "</article>";
+          html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id) + "</article>";
         });
         html += "</div>";
         if (!threadsTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">Threads could not be loaded. Live sync is not connected. Try again.</p>';
         if (done.length > 0) {
-          html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)">Settled</h3><div class="stack" style="margin-top:0.75rem">';
+          html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)" data-st="mysteries.settled">' + esc(stVal("mysteries.settled", "Settled")) + '</h3><div class="stack" style="margin-top:0.75rem">';
           done.forEach(function (t) {
-            html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + "</article>";
+            html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id) + "</article>";
           });
           html += "</div>";
         }
         html += "</div>";
         main.innerHTML = html;
+        wireTextEditButtons(main);
+        decorateSiteText(main);
       }
     </script>
 
@@ -2289,6 +2467,17 @@
         var panStart = null, pinchStart = null;
         var lastTap = { t: 0, x: 0, y: 0 };
         var pinEls = {};
+        // While an item drag is in flight, buildPins must not rebuild the
+        // pin layer: rebuilding replaces the very element being dragged,
+        // the drag then moves a detached node, and the pin vanishes from
+        // the map until the pointer is released. Rebuilds queue instead
+        // and run when the drag ends.
+        var dragActive = false, rebuildQueued = false;
+        // Set by any deliberate view change (zoom, pan, jump to a point).
+        // The image load handler re-fits with the true aspect only while
+        // this is still false, so a slow-loading map never snaps the view
+        // away from where the reader has already taken it.
+        var userMoved = false;
 
         function frameSize() { return { w: frame.clientWidth || 0, h: frame.clientHeight || 0 }; }
         function clampView(s, x, y) {
@@ -2326,11 +2515,13 @@
           applyView(s, (fs.w - fs.w * s) / 2, (fs.h - fs.w * aspect * s) / 2);
         }
         function zoomAt(cx, cy, factor) {
+          userMoved = true;
           var ns = Math.min(6, Math.max(0.4, scale * factor));
           var k = ns / scale;
           applyView(ns, cx - (cx - tx) * k, cy - (cy - ty) * k);
         }
         function zoomToPoint(px, py, s) {
+          userMoved = true;
           s = s || 2.4;
           var fs = frameSize();
           applyView(s, fs.w / 2 - (px / 100) * fs.w * s, fs.h / 2 - (py / 100) * fs.w * aspect * s);
@@ -2374,7 +2565,7 @@
               if (!moved) {
                 moved = true;
                 if (timer) { clearTimeout(timer); timer = null; }
-                if (wrap && handlers.canDrag) wrap.classList.add("is-dragging");
+                if (handlers.canDrag) { dragActive = true; if (wrap) wrap.classList.add("is-dragging"); }
               }
               if (e.cancelable) e.preventDefault();
               var pt = toMapCoords(e.clientX, e.clientY);
@@ -2392,11 +2583,13 @@
               var wasMoved = moved, finalPos = pos;
               cleanup();
               if (wrap) wrap.classList.remove("is-dragging");
+              dragActive = false;
               if (longFired) return;
               if (wasMoved && finalPos && handlers.canDrag && handlers.onDragDone) {
                 lastDrag = { key: key, t: Date.now() };
                 handlers.onDragDone(finalPos.x, finalPos.y);
               }
+              if (rebuildQueued) { rebuildQueued = false; buildPins(); }
             }
             window.addEventListener("pointermove", mv, true);
             window.addEventListener("pointerup", up, true);
@@ -2414,6 +2607,7 @@
         }
 
         function buildPins() {
+          if (dragActive) { rebuildQueued = true; return; }
           var layer = frame.querySelector("[data-pin-layer]");
           var html = "";
           pins.forEach(function (p, i) {
@@ -2425,19 +2619,21 @@
             var pHidden = p.visibility === "gm";
             var pBadges = (pLocked ? '<span class="pin-lock" aria-hidden="true">&#128274;</span>' : "") + (pHidden ? '<span class="pin-hidden-tag">Hidden</span>' : "");
             var pStateCls = (pLocked ? " is-locked" : "") + (pHidden ? " is-hidden" : "") + ((opts.canDragPins && !pLocked) ? " draggable" : "");
+            var pDropKey = "pin-" + p.id;
+            var pDrop = DROP_SEEN[pDropKey] ? "" : " drop-in";
+            DROP_SEEN[pDropKey] = true;
             if (art) {
               html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-pinwrap="' + p.id + '" data-size="' + sz + '" style="left:' + p.x + "%;top:" + p.y + '%">'
-                + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '" style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms">'
+                + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + pDrop + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '"' + (pDrop ? ' style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms"' : "") + '>'
                 + '<img src="' + art + '" alt="" draggable="false">' + '<span class="badge">' + p.number + "</span>" + pBadges
                 + "</button>"
                 + (labelOn ? '<span class="map-label' + (p.x > 76 ? " flip" : "") + '">' + esc(p.label) + "</span>" : "")
                 + "</div>";
             } else {
               var pending = p.status === "pending";
-              var delay = (i * 130) + "ms";
               html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-pinwrap="' + p.id + '" data-anchor="bottom" data-size="' + sz + '" style="left:' + p.x + "%;top:" + p.y + '%">'
-                + '<button type="button" class="map-pin diamond' + (isSel ? " selected" : "") + (pending ? " pending" : "") + pStateCls + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pending ? " (awaiting GM approval)" : "") + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '" style="animation-delay:' + delay + '">'
-                + '<span class="pin-top"><span class="pin-ring" style="animation-delay:' + delay + '"></span><span class="pin-head" style="animation-delay:' + delay + '"><span class="pin-num">' + p.number + "</span></span></span>"
+                + '<button type="button" class="map-pin diamond' + (isSel ? " selected" : "") + (pending ? " pending" : "") + pStateCls + pDrop + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pending ? " (awaiting GM approval)" : "") + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '"' + (pDrop ? ' style="animation-delay:' + (i * 130) + 'ms"' : "") + '>'
+                + '<span class="pin-top"><span class="pin-ring"></span><span class="pin-head"><span class="pin-num">' + p.number + "</span></span></span>"
                 + '<span class="pin-stem"></span>' + pBadges
                 + (labelOn ? '<span class="pin-tip">' + esc(p.label) + "</span>" : "")
                 + "</button></div>";
@@ -2454,8 +2650,11 @@
             var mHidden = m.visibility === "gm";
             var mBadges = (mLocked ? '<span class="pin-lock" aria-hidden="true">&#128274;</span>' : "") + (mHidden ? '<span class="pin-hidden-tag">Hidden</span>' : "");
             var mStateCls = (mLocked ? " is-locked" : "") + (mHidden ? " is-hidden" : "") + ((opts.canDragMarkers && !mLocked) ? " draggable" : "");
+            var mDropKey = "marker-" + m.id;
+            var mDrop = DROP_SEEN[mDropKey] ? "" : " drop-in";
+            DROP_SEEN[mDropKey] = true;
             html += '<div class="pin-wrap' + (isSel ? " selected" : "") + '" data-markerwrap="' + m.id + '" data-size="' + itemSize("marker", m.id) + '" style="left:' + m.x + "%;top:" + m.y + '%">'
-              + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
+              + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + mDrop + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
               + (art ? '<img src="' + art + '" alt="" draggable="false">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
               + "</button>"
               + (labelOn ? '<span class="map-label' + (m.x > 76 ? " flip" : "") + '">' + esc(m.label) + "</span>" : "")
@@ -2554,7 +2753,7 @@
           }
           if (panStart && pointers.size === 1) {
             var pdx = e.clientX - panStart.cx, pdy = e.clientY - panStart.cy;
-            if (Math.hypot(pdx, pdy) > 6) { panMoved = true; clearBgLongPress(); }
+            if (Math.hypot(pdx, pdy) > 6) { panMoved = true; userMoved = true; clearBgLongPress(); }
             applyView(scale, panStart.tx + pdx, panStart.ty + pdy);
           }
         });
@@ -2630,6 +2829,7 @@
         }, { passive: false });
         frame.addEventListener("keydown", function (e) {
           var step = 48, fs = frameSize();
+          if (e.key.indexOf("Arrow") === 0) userMoved = true;
           if (e.key === "ArrowLeft") applyView(scale, tx + step, ty);
           else if (e.key === "ArrowRight") applyView(scale, tx - step, ty);
           else if (e.key === "ArrowUp") applyView(scale, tx, ty + step);
@@ -2652,13 +2852,18 @@
         img.addEventListener("load", function () {
           if (img.naturalWidth > 0) {
             aspect = img.naturalHeight / img.naturalWidth;
-            var sv = opts.mapKey && state.mapViews ? state.mapViews[opts.mapKey] : null;
-            if (sv) applyView(sv.s, sv.x, sv.y); else fit();
+            // The map always starts fitted to the frame, with the real
+            // image aspect once it is known. A view left over from earlier
+            // panning or zooming is never restored over the fit, and a
+            // view the reader has already chosen is never overridden.
+            if (!userMoved) fit();
           }
         });
         buildPins();
-        var savedView = opts.mapKey && state.mapViews ? state.mapViews[opts.mapKey] : null;
-        if (savedView) applyView(savedView.s, savedView.x, savedView.y); else fit();
+        // Start fitted, every time the map is shown. (An explicit jump to
+        // a pin, via zoomToPoint from a pin link or the pin list, still
+        // applies after this and is not overridden.)
+        fit();
         return {
           fit: fit,
           zoomToPoint: zoomToPoint,
@@ -2718,6 +2923,7 @@
         if (!article && fallback) html += '<button type="button" class="btn btn-teal" id="pinOpenFallback">Open article: ' + esc(fallback.title) + "</button>";
         if (person) html += '<button type="button" class="btn btn-outline" id="pinOpenPerson">Its people</button>';
         html += '<button type="button" class="btn btn-outline" id="pinZoom">Zoom to pin</button>';
+        if (canEditText()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit text</button>';
         html += "</div></section>";
         container.innerHTML = html;
         document.getElementById("pinClose").addEventListener("click", function () {
@@ -2738,6 +2944,8 @@
         document.getElementById("pinZoom").addEventListener("click", function () {
           if (stage) stage.zoomToPoint(pin.x, pin.y);
         });
+        var pinEdit = document.getElementById("pinEditText");
+        if (pinEdit) pinEdit.addEventListener("click", function () { openRenameDialog("pin", pin.id); });
       }
       function renderMarkerPanel(container) {
         var m = selectedMarker();
@@ -2756,7 +2964,9 @@
           + '<div class="chiprow" style="margin-top:0.75rem">'
           + (article ? '<button type="button" class="btn btn-teal" id="markerOpenArticle">Open article</button>' : "")
           + (linkMap ? '<button type="button" class="btn btn-deep" id="markerOpenMap">Open map: ' + esc(linkMap.title) + "</button>" : "")
-          + '<button type="button" class="btn btn-outline" id="markerZoom">Zoom to marker</button></div></section>';
+          + '<button type="button" class="btn btn-outline" id="markerZoom">Zoom to marker</button>'
+          + (canEditText() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit text</button>' : "")
+          + "</div></section>";
         container.innerHTML = html;
         var oa = document.getElementById("markerOpenArticle");
         if (oa && article) oa.addEventListener("click", function () {
@@ -2772,6 +2982,8 @@
         document.getElementById("markerZoom").addEventListener("click", function () {
           if (stage) stage.zoomToPoint(m.x, m.y);
         });
+        var markerEdit = document.getElementById("markerEditText");
+        if (markerEdit) markerEdit.addEventListener("click", function () { openRenameDialog("marker", m.id); });
       }
       // Hex snap for the Caldaryn hex map: pointy-top hexes, columns about
       // 1.62 percent apart, rows about 1.54 percent apart, odd rows offset
@@ -2831,7 +3043,7 @@
       function mapToolsHtml() {
         var html = '<section aria-label="GM Map Tools" style="margin-top:2rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:1rem">'
           + '<h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">GM Map Tools</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Drag any unlocked pin or marker to move it; dragging keeps your zoom. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it.</p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Pins and markers start locked; unlock one to drag it, and dragging keeps your zoom. Right-click any item to edit its text, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it.</p>'
           + (state.mapKey === "caldaryn" ? '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" id="toolSnap" aria-pressed="' + (state.snapHex !== false) + '">Snap to hexes: ' + (state.snapHex !== false ? "On" : "Off") + "</button></div>" : "")
           + '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Upload a new icon or token</strong></p>'
           + '<label class="gm-field"><span>Icon name</span><input type="text" id="iconName" class="search-input"></label>'
@@ -3037,6 +3249,7 @@
             if (res.error || !res.data || !res.data[0]) { setMapMsg("The copy could not be made."); return; }
             var np = mapPinRow(res.data[0]);
             DATA.pins.push(np);
+            MAP_EXTRAS.locks["pin-" + np.id] = false; saveExtras("locks");
             var sz = MAP_EXTRAS.sizes["pin-" + id];
             if (sz != null) { MAP_EXTRAS.sizes["pin-" + np.id] = sz; saveExtras("sizes"); }
             state.selectedPinId = np.id; state.selectedMarkerId = null;
@@ -3049,6 +3262,7 @@
             if (res.error || !res.data || !res.data[0]) { setMapMsg("The copy could not be made."); return; }
             var nm = mapMarkerRow(res.data[0]);
             MARKERS.push(nm);
+            MAP_EXTRAS.locks["marker-" + nm.id] = false; saveExtras("locks");
             var lk = MAP_EXTRAS.links["marker-" + id];
             if (lk) { MAP_EXTRAS.links["marker-" + nm.id] = lk; saveExtras("links"); }
             var sz2 = MAP_EXTRAS.sizes["marker-" + id];
@@ -3068,12 +3282,13 @@
         var wrap = document.createElement("div");
         wrap.className = "map-dialog-backdrop";
         wrap.id = "mapDialog";
-        var title = kind === "pin" ? "Rename pin " + item.number : "Rename " + (item.kind === "party" ? "party marker" : item.kind);
+        var title = kind === "pin" ? "Edit pin " + item.number + " text" : "Edit " + (item.kind === "party" ? "party marker" : item.kind) + " text";
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
           + '<label class="gm-field"><span>Name shown on the map</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
+          + '<label class="gm-field"><span>Note shown in its panel</span><textarea id="dlgNote" class="search-input" rows="5">' + esc(item.note || "") + "</textarea></label>"
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save name</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save text</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
         var input = document.getElementById("dlgLabel");
         input.focus(); input.select();
@@ -3082,11 +3297,12 @@
         document.getElementById("dlgSave").addEventListener("click", function () {
           var msg = document.getElementById("dlgMsg");
           if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-          var patch = { label: input.value };
+          var patch = { label: input.value, note: document.getElementById("dlgNote").value };
           var table = kind === "pin" ? "map_pins" : "map_markers";
           sb.from(table).update(patch, { returning: "minimal" }).eq("id", id).then(function (res) {
-            if (res.error) { msg.textContent = "The name could not be saved."; return; }
+            if (res.error) { msg.textContent = "The text could not be saved."; return; }
             item.label = patch.label;
+            item.note = patch.note;
             wrap.remove();
             setMapMsg("Saved.");
             render();
@@ -3195,7 +3411,7 @@
         if (gmIsUnlocked()) {
           var locked = isLocked(kind, id);
           var hidden = item.visibility === "gm";
-          items.push({ label: "Rename\u2026", action: function () { openRenameDialog(kind, id); } });
+          items.push({ label: "Edit text\u2026", action: function () { openRenameDialog(kind, id); } });
           items.push({ label: "Change icon\u2026", iconKey: item.iconKey || null, glyph: item.iconKey ? null : "\u25C6", action: function () { openIconPickerDialog(kind, id); } });
           items.push({ label: locked ? "Unlock (allow dragging)" : "Lock (stop dragging)", action: function () { toggleItemLock(kind, id); } });
           items.push({ label: hidden ? "Reveal to players" : "Hide from players", action: function () { toggleItemHidden(kind, id); } });
@@ -3274,8 +3490,8 @@
       }
 
       function setAllLocks(locked) {
-        visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { if (locked) MAP_EXTRAS.locks["pin-" + p.id] = true; else delete MAP_EXTRAS.locks["pin-" + p.id]; } });
-        visibleMarkers(state.mapKey).forEach(function (m) { if (locked) MAP_EXTRAS.locks["marker-" + m.id] = true; else delete MAP_EXTRAS.locks["marker-" + m.id]; });
+        visiblePins().forEach(function (p) { if (p.mapKey === state.mapKey) { MAP_EXTRAS.locks["pin-" + p.id] = locked ? true : false; } });
+        visibleMarkers(state.mapKey).forEach(function (m) { MAP_EXTRAS.locks["marker-" + m.id] = locked ? true : false; });
         saveExtras("locks").then(function (ok) {
           setMapMsg(ok ? (locked ? "Everything on this map is locked." : "Everything on this map is unlocked.") : "The lock change could not be saved.");
           render();
@@ -3385,7 +3601,7 @@
       function renderMaps(main) {
         var mapDef = MAPS[state.mapKey];
         if (!mapDef) {
-          main.innerHTML = '<div style="margin-top:1.5rem"><h2 class="view-title">Maps of Caldaryn</h2>' + syncNoticeHtml()
+          main.innerHTML = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="maps.title">' + esc(stVal("maps.title", "Maps of Caldaryn")) + "</h2>" + syncNoticeHtml()
             + '<p class="muted" style="margin-top:1rem">The maps could not be loaded. Live sync is not connected. Try again.</p></div>';
           return;
         }
@@ -3395,7 +3611,7 @@
         var k = state.mapKey, seen = {};
         while (k && MAPS[k] && !seen[k]) { seen[k] = true; crumbs.unshift({ key: k, title: MAPS[k].title }); k = MAPS[k].parentKey; }
 
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">Maps of Caldaryn</h2>'
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="maps.title">' + esc(stVal("maps.title", "Maps of Caldaryn")) + "</h2>"
           + '<p class="small muted" style="margin-top:0.25rem" data-st="maps.intro">' + esc(siteText("maps.intro")) + "</p>";
         if (crumbs.length > 1) {
           html += '<nav class="crumbs" aria-label="Map breadcrumb">';
@@ -3416,7 +3632,7 @@
           + '<button type="button" class="ghost-btn" id="toggleLabels" aria-pressed="' + state.showLabels + '">' + (state.showLabels ? "Hide labels" : "Show labels") + "</button>"
           + "</div>";
         if (gmIsUnlocked()) {
-          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
             + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>"
             + iconLibraryHtml();
         }
@@ -3443,7 +3659,7 @@
         pins.forEach(function (p) {
           html += '<li><button type="button" data-pinlist="' + p.id + '"><span class="num">' + p.number + '.</span> <span style="font-weight:500">' + esc(p.label) + "</span>"
             + (p.visibility === "gm" ? ' <span class="hidden-tag">Hidden</span>' : "")
-            + (isLocked("pin", p.id) ? ' <span class="hidden-tag" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span>' : "")
+            + (gmIsUnlocked() && isLocked("pin", p.id) ? ' <span class="hidden-tag" style="background:#3a3e2e;border:1px solid #5a5e4a">Locked</span>' : "")
             + (p.note ? '<span class="note">' + esc(p.note) + "</span>" : "") + "</button></li>";
         });
         if (pins.length === 0) html += '<li class="small muted">No pins on this map yet.</li>';
