@@ -2918,8 +2918,16 @@
           return { s: s, x: Math.max(minX - 40, Math.min(40, x)), y: Math.max(minY - 40, Math.min(40, y)) };
         }
         function applyElTransform(el) {
-          var anch = el.getAttribute("data-anchor") === "bottom" ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
+          var bottom = el.getAttribute("data-anchor") === "bottom";
+          var anch = bottom ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
           var sf = Number(el.getAttribute("data-size")) || 1;
+          // Scale around the anchor point itself. With the default centre
+          // origin, a bottom-anchored pin's tip landed (sf/scale - 1) *
+          // height / 2 below its stored position whenever the zoom was not
+          // exactly the pin's size factor, so the visible pin sat below
+          // the point a drag was moving and resizing grew it from its
+          // middle instead of its tip.
+          el.style.transformOrigin = bottom ? "50% 100%" : "50% 50%";
           el.style.transform = anch + " scale(" + (sf / scale) + ")";
         }
         function applyView(s, x, y) {
@@ -2980,6 +2988,19 @@
             ev.stopPropagation();
             var pid = ev.pointerId;
             var startX = ev.clientX, startY = ev.clientY;
+            // Where on the item the press landed, kept as the distance
+            // from the pointer to the item's anchor point in map
+            // coordinates. A drag preserves this offset, so the item stays
+            // under the exact spot that was grabbed. Without it the anchor
+            // snapped to the pointer on the first move: for a numbered pin
+            // the anchor is its tip, far below the diamond head a reader
+            // actually grabs, so the pin felt gripped from way below.
+            var grabDX = 0, grabDY = 0;
+            if (wrap && handlers.canDrag) {
+              var pressPt = toMapCoords(startX, startY);
+              var anchorX = parseFloat(wrap.style.left), anchorY = parseFloat(wrap.style.top);
+              if (isFinite(anchorX) && isFinite(anchorY)) { grabDX = anchorX - pressPt.x; grabDY = anchorY - pressPt.y; }
+            }
             var pos = null, moved = false, longFired = false;
             var timer = null;
             if (handlers.onLongPress) {
@@ -2999,7 +3020,11 @@
                 if (handlers.canDrag) { dragActive = true; if (wrap) wrap.classList.add("is-dragging"); }
               }
               if (e.cancelable) e.preventDefault();
-              var pt = toMapCoords(e.clientX, e.clientY);
+              var rawPt = toMapCoords(e.clientX, e.clientY);
+              var pt = {
+                x: Math.round(Math.max(0, Math.min(100, rawPt.x + grabDX)) * 100) / 100,
+                y: Math.round(Math.max(0, Math.min(100, rawPt.y + grabDY)) * 100) / 100
+              };
               pos = pt;
               if (wrap && handlers.canDrag) { wrap.style.left = pt.x + "%"; wrap.style.top = pt.y + "%"; }
             }
