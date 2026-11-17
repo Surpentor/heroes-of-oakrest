@@ -402,7 +402,7 @@
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
         "timeline.intro": "The whole road in order, oldest first: the deep history of Caldaryn, from the Shaping of the Peaks through the Eclipse at year 0, and on to the days of 101 AE. Moments drawn from the Chronicle link back to their entries.",
-        "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: right-click the map (long-press on touch) and pick an icon by name to drop it, drag pins and markers to move them, right-click any item for rename, lock, hide, and delete options, and press Delete to remove the selected item.",
+        "maps.intro": "Drag to pan. Zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: right-click the map (long-press on touch) and pick an icon by name to drop it, drag pins and markers to move them, right-click any item for rename, lock, hide, and delete options, and press Delete to remove the selected item.",
         "footer.sync": SYNC_SUMMARY
       };
       // Header kicker: shows the current in-world day, derived from the
@@ -1987,8 +1987,8 @@
     <script>
       "use strict";
       // ---------- Interactive map stage ----------
-      // Pan (drag / arrow keys), zoom (zoom bar, slider, plus/minus buttons,
-      // pinch, double-tap, keyboard). The mouse wheel never zooms.
+      // Pan (drag / arrow keys), zoom (mouse wheel, zoom bar, slider,
+      // plus/minus buttons, pinch, double-tap, keyboard).
       function compassRoseSvg() {
         return '<svg viewBox="0 0 100 100" aria-hidden="true">'
           + '<circle cx="50" cy="50" r="47" fill="#fbf7ec" fill-opacity="0.88" stroke="#221d13" stroke-width="2"/>'
@@ -2330,6 +2330,16 @@
           lastTap = { t: now, x: e.clientX, y: e.clientY };
           opts.onSelectPin(null);
         });
+        frame.addEventListener("wheel", function (e) {
+          e.preventDefault();
+          var rect = frame.getBoundingClientRect();
+          var delta = e.deltaY;
+          if (e.deltaMode === 1) delta *= 16;
+          else if (e.deltaMode === 2) delta *= frame.clientHeight || 400;
+          var factor = Math.exp(-delta * 0.0016);
+          factor = Math.min(2, Math.max(0.5, factor));
+          if (factor !== 1) zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+        }, { passive: false });
         frame.addEventListener("keydown", function (e) {
           var step = 48, fs = frameSize();
           if (e.key === "ArrowLeft") applyView(scale, tx + step, ty);
@@ -3041,7 +3051,7 @@
             + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>";
         }
         html += '<div style="margin-top:0.75rem">'
-          + '<div class="map-frame" id="mapFrame" role="application" tabindex="0" aria-label="Interactive map: ' + esc(mapDef.title) + '. Drag to pan, use the zoom bar or pinch to zoom, arrow keys pan, plus and minus zoom.">'
+          + '<div class="map-frame" id="mapFrame" role="application" tabindex="0" aria-label="Interactive map: ' + esc(mapDef.title) + '. Drag to pan, use the mouse wheel, zoom bar or pinch to zoom, arrow keys pan, plus and minus zoom.">'
           + '<div class="map-inner" data-map-inner>'
           + '<img data-map-img src="' + esc(mapDef.img) + '" alt="' + esc(mapDef.alt) + '" draggable="false">'
           + "<div data-pin-layer></div>"
