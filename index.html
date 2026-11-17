@@ -330,7 +330,7 @@
   <body>
     <header class="site">
       <div class="wrap">
-        <p class="kicker" id="siteKicker" data-st="header.kicker">Caldaryn · Year 101 AE · Ashen Dawn</p>
+        <p class="kicker" id="siteKicker" data-st="header.kicker">Caldaryn · 9th of Dawnsow · Year 101 AE</p>
         <p class="site-title" id="siteTitle" data-st="header.title">The Heroes of Oakrest: A Wiki of the Road</p>
       </div>
       <nav class="sections wrap" aria-label="Site sections" id="topnav"></nav>
@@ -365,7 +365,7 @@
       var CATS = ["Places", "Organizations", "The Gods", "People of Caldaryn", "Prophecies", "History", "Creatures", "Items", "Peoples of Caldaryn"];
       var SYNC_SUMMARY = "Seeded from the vault campaign log, the unified campaign timeline, and WorldAnvil notes verified 2026-10-10.";
       var SITE_TEXT_DEFAULTS = {
-        "header.kicker": "Caldaryn \u00B7 Year 101 AE \u00B7 Ashen Dawn",
+        "header.kicker": "Caldaryn \u00B7 9th of Dawnsow \u00B7 Year 101 AE",
         "header.title": "The Heroes of Oakrest: A Wiki of the Road",
         "hero.title": "Dawn at the Ashen Hollows",
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
@@ -374,7 +374,54 @@
         "maps.intro": "Drag to pan. Zoom with the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap; the mouse wheel scrolls the page, never the map. Tap a numbered pin for its note, its article, or the map nested inside it.",
         "footer.sync": SYNC_SUMMARY
       };
+      // Header kicker: shows the current in-world day, derived from the
+      // latest dated Chronicle entry (highest sortKey with a date), so it
+      // moves forward as the story advances. Falls back to the campaign's
+      // current day (9th of Dawnsow, 101 AE) until the Chronicle loads or
+      // when no dated entry is available. A GM wording saved for
+      // header.kicker is still honoured, unless it still holds the old
+      // wording, in which case the derived day takes over.
+      function parseChronicleDate(dateStr) {
+        if (!dateStr) return null;
+        var s = String(dateStr);
+        var yearMatch = s.match(/(\d{1,3})\s*AE/i);
+        var year = yearMatch ? yearMatch[1] : null;
+        var m = s.match(/(\d{1,2}(?:st|nd|rd|th))\s+of\s+([A-Za-z][A-Za-z'-]*)/i);
+        if (m) return { day: m[1] + " of " + m[2].charAt(0).toUpperCase() + m[2].slice(1), year: year };
+        m = s.match(/(\d{1,2}(?:st|nd|rd|th))\s+([A-Za-z][A-Za-z'-]*)/i);
+        if (m && !/^(AE|Year)$/i.test(m[2])) return { day: m[1] + " of " + m[2].charAt(0).toUpperCase() + m[2].slice(1), year: year };
+        m = s.match(/\b([A-Za-z][A-Za-z'-]*)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+        if (m && !/^(Year|AE|Day|The|Dawn|of)$/i.test(m[1])) {
+          var n = parseInt(m[2], 10);
+          var suffix = (n % 10 === 1 && n % 100 !== 11) ? "st" : (n % 10 === 2 && n % 100 !== 12) ? "nd" : (n % 10 === 3 && n % 100 !== 13) ? "rd" : "th";
+          return { day: n + suffix + " of " + m[1].charAt(0).toUpperCase() + m[1].slice(1), year: year };
+        }
+        return null;
+      }
+      function derivedKicker() {
+        var fallback = SITE_TEXT_DEFAULTS["header.kicker"];
+        var entries = [];
+        try { entries = visibleChronicle(); } catch (e) { entries = (typeof DATA !== "undefined" && DATA.chronicle) || []; }
+        entries = entries.slice().sort(function (a, b) { return (b.sortKey || 0) - (a.sortKey || 0); });
+        for (var i = 0; i < entries.length; i++) {
+          var dateStr = entries[i] && entries[i].date ? String(entries[i].date).trim() : "";
+          if (!dateStr) continue;
+          var parsed = parseChronicleDate(dateStr);
+          if (parsed && parsed.day) return "Caldaryn \u00B7 " + parsed.day + " \u00B7 Year " + (parsed.year || "101") + " AE";
+          return "Caldaryn \u00B7 " + dateStr;
+        }
+        return fallback;
+      }
+      function headerKickerText() {
+        if (Object.prototype.hasOwnProperty.call(SITE_TEXT, "header.kicker") && SITE_TEXT["header.kicker"]) {
+          var stored = String(SITE_TEXT["header.kicker"]).trim();
+          if (stored && !/Ashen\s+Dawn/.test(stored) && stored !== SITE_TEXT_DEFAULTS["header.kicker"]) return stored;
+          if (stored && /Ashen\s+Dawn/.test(stored)) return derivedKicker();
+        }
+        return derivedKicker();
+      }
       function siteText(key) {
+        if (key === "header.kicker") return headerKickerText();
         if (Object.prototype.hasOwnProperty.call(SITE_TEXT, key) && SITE_TEXT[key]) return SITE_TEXT[key];
         return SITE_TEXT_DEFAULTS[key] || "";
       }
