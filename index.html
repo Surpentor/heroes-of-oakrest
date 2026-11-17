@@ -365,6 +365,33 @@
       .lib-cell.sel { outline: 2px solid var(--teal); }
       .lib-cell span { overflow-wrap: break-word; }
 
+      /* New Player Primer */
+      .primer-lead { border: 1px solid var(--gold); border-radius: var(--radius); background: var(--surface); padding: 1rem 1.125rem; margin-top: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+      .primer-lead p { margin: 0; font-size: 15px; line-height: 1.65; }
+      .primer-toc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+      .primer-section { margin-top: 2.5rem; }
+      .primer-section > h3 { font-family: var(--font-display); font-size: 1.375rem; font-weight: 600; color: var(--accent-deep); margin: 0; padding-bottom: 0.5rem; border-bottom: 2px solid var(--gold); }
+      .primer-section > p { margin: 0.875rem 0 0; font-size: 15px; line-height: 1.65; }
+      .primer-cards { display: grid; gap: 0.75rem; margin-top: 1rem; align-items: stretch; }
+      .primer-cards > * { min-width: 0; height: 100%; }
+      @media (min-width: 640px) { .primer-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+      .primer-card { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+      .primer-card h4 { font-family: var(--font-display); font-size: 1.0625rem; font-weight: 600; line-height: 1.3; margin: 0; overflow-wrap: break-word; }
+      .primer-card .primer-kind { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin: 0 0 0.375rem; }
+      .primer-card p.line { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.55; color: var(--dim); overflow-wrap: break-word; }
+      .primer-card .primer-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; padding-top: 0.75rem; }
+      .primer-steps { counter-reset: primerstep; list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
+      .primer-steps li { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0.875rem 1rem 0.875rem 3.25rem; font-size: 15px; line-height: 1.6; }
+      .primer-steps li::before { counter-increment: primerstep; content: counter(primerstep); position: absolute; left: 1rem; top: 0.875rem; display: flex; align-items: center; justify-content: center; width: 1.625rem; height: 1.625rem; border-radius: 50%; background: var(--gold); color: #12140f; font-weight: 700; font-size: 0.875rem; }
+      ol.primer-beats { list-style: none; margin: 1rem 0 0; padding: 0; }
+      ol.primer-beats li { position: relative; border-left: 2px solid var(--border); padding: 0 0 1.25rem 1.25rem; font-size: 15px; line-height: 1.6; }
+      ol.primer-beats li:last-child { padding-bottom: 0.25rem; }
+      ol.primer-beats .dot { position: absolute; left: -7px; top: 6px; height: 12px; width: 12px; border-radius: 50%; border: 2px solid var(--bg); background: var(--teal); }
+      ol.primer-beats .b-date { display: block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); }
+      ol.primer-beats .b-title { font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem; }
+      .primer-guide { display: grid; gap: 0.75rem; margin-top: 1rem; }
+      .primer-guide .primer-card p.line { color: var(--text); }
+
       /* Dark mode polish */
       ::selection { background: var(--gold); color: #12140f; }
       ::placeholder { color: var(--dim); opacity: 0.85; }
@@ -420,6 +447,8 @@
         "hero.text": "A newborn in arms, a cursed dagger in a pack, a wraith behind, a zealot ahead. Everything the party knows, in one place.",
         "chronicle.intro": "The story so far, newest first. The vault session logs run Greenswell through Dawnsow; the road is at dawn on the 9th of Dawnsow.",
         "timeline.intro": "The whole road in order, oldest first: the deep history of Caldaryn, from the Shaping of the Peaks through the Eclipse at year 0, and on to the days of 101 AE. Moments drawn from the Chronicle link back to their entries.",
+        "primer.intro": "For a player joining the Heroes of Oakrest mid-campaign: the world of Caldaryn, its gods and peoples, the places on the party\u2019s road, and the story so far. Everything here is what the party itself knows, in the open. Nothing on this page needs the GM passcode, and nothing here spoils what the party has not yet learned.",
+        "primer.start": "Read this page first, top to bottom. Then read the Chronicle, which tells the story as it happened. After that, wander: every name on this page that has a button leads to its fuller entry, and the sections below end with a short guide to what each part of this site is for.",
         "maps.intro": "Drag to pan. Zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, a pinch, or a double-tap. Tap a numbered pin for its note, its article, or the map nested inside it. GMs: right-click the map (long-press on touch) and pick an icon by name to drop it, drag pins and markers to move them, right-click any item for rename, lock, hide, and delete options, and press Delete to remove the selected item.",
         "footer.sync": SYNC_SUMMARY
       };
@@ -896,6 +925,7 @@
       var stage = null;
 
       var NAV = [
+        { key: "primer", label: "Primer" },
         { key: "wiki", label: "Wiki" },
         { key: "chronicle", label: "Chronicle" },
         { key: "timeline", label: "Timeline" },
@@ -951,6 +981,7 @@
         stage = null;
         if (state.view === "gm" && !gmIsUnlocked()) state.view = "gmsignin";
         if (state.view === "wiki") renderWiki(main);
+        else if (state.view === "primer") renderPrimer(main);
         else if (state.view === "chronicle") renderChronicle(main);
         else if (state.view === "timeline") renderTimeline(main);
         else if (state.view === "people") renderPeople(main);
@@ -1412,6 +1443,231 @@
             state.selectedPinId = pid; state.focusPinId = pid; state.reader = null;
             render(); window.scrollTo(0, 0);
           }
+        });
+        wireCards(main);
+        decorateSiteText(main);
+      }
+
+      // ---------- New Player Primer ----------
+      // A single orientation page for a player joining mid-campaign,
+      // written only from what the party itself knows: the player-visible
+      // lore, people, chronicle, and threads already on this site. Where
+      // the sources disagreed, the primer follows the GM's rulings of
+      // 17 Nov 2026: Neriath is a demigod; Lord Nethor rules Solren,
+      // answers to its Merchant Council but makes the final decision, and
+      // the Secret Council of Smiths holds sway with the merchants; Karak
+      // Torun stands on an island off the eastern coast, as the map
+      // shows; the War of Stone and Iron ran its whole span, 750 to
+      // 700 BE, and Elanor Brightquill's 744 BE chronicle is her own
+      // firsthand account from inside it; and the Emerald Glades are a
+      // named region inside the Veilgrove Forest. Every item that has a
+      // full article, person, or map on the site links to it live.
+      function primerLoreChip(key, label) {
+        var e = loreByKey(key);
+        if (!e) return "";
+        return '<button type="button" class="tl-link" data-primer-lore="' + esc(e.key) + '">' + esc(label || e.title) + "</button>";
+      }
+      function primerMapChip(mapKey, label) {
+        var m = MAPS[mapKey];
+        if (!m) return "";
+        return '<button type="button" class="tl-link" data-primer-map="' + esc(mapKey) + '">Map: ' + esc(label || m.title) + "</button>";
+      }
+      function primerViewChip(view, label) {
+        return '<button type="button" class="tl-link" data-primer-view="' + esc(view) + '">' + esc(label) + "</button>";
+      }
+      function primerCard(kind, name, line, chips) {
+        return '<article class="primer-card">'
+          + (kind ? '<p class="primer-kind">' + esc(kind) + "</p>" : "")
+          + "<h4>" + esc(name) + "</h4>"
+          + '<p class="line">' + esc(line) + "</p>"
+          + (chips ? '<div class="primer-links">' + chips + "</div>" : "")
+          + "</article>";
+      }
+      function renderPrimer(main) {
+        var heroes = visiblePeople().filter(function (p) { return p.kind === "pc"; });
+        var companions = visiblePeople().filter(function (p) { return p.kind === "companion"; });
+
+        var gods = [
+          { key: "god-thargrim", kind: "Divine Family", name: "Thargrim the Forgefather", line: "God of the forge and of craft, patriarch of the pantheon. He raised the Obsidian Peaks and founded the Deepholds, and the dwarves hold him above all other gods. Every smith in Caldaryn swears by him; Oakrest\u2019s Forge was blessed by his priests." },
+          { key: "god-danuviel", kind: "Divine Family", name: "Danuviel the Skyborn", line: "Goddess of sky and weather, matriarch of the pantheon. She planted the Veilgrove Forest as a sanctuary for the elves, and farmers pray to her for gentle rain while sailors ask her for safe passage." },
+          { key: "god-yelna", kind: "Divine Family", name: "Yelna the Hearthmother", line: "Goddess of hearth, home, and the bond of kin. Her flame is the Everlight that burns in Oakrest\u2019s square, halflings hold her above all, and Buddy Hobb-Took is her paladin." },
+          { key: "god-vorgrath", kind: "Divine Family", name: "Vorgrath the Hammer of War", line: "God of war: the raw drive to conquer and survive. His priests rallied the human armies in the War of Stone and Iron, and Dietrich Dorn, who travels with the party, is his cleric." },
+          { key: "god-ralnath", kind: "Divine Family", name: "Ralnath the Keeper of Shadows", line: "God of shadows and kept secrets, and guide of souls through the passage of death. The elves revere him as part of the natural cycle, and he aided Danuviel in the Binding of the Storm." },
+          { key: "god-vaelis", kind: "Divine Family", name: "Vaelis the Prism Warden", line: "God of magic, light, illusion, and warded, changing knowledge. Vaelis raised the Prismspire, the crystal tower whose raising opened an age of learning and artistry." },
+          { key: "god-korynth", kind: "Outsider", name: "Korynth the Nexus of Fates", line: "One of the three Outsiders who came through the rift at the Eclipse. Fate unbound: the nexus where threads cross and tangle, and the steward of the Eclipse itself." },
+          { key: "god-maldrath", kind: "Outsider", name: "Maldrath the Arcane Tyrant", line: "An Outsider, lord of arcane magic unbound, who twists magic and creation into tools of oppression. His name is one reason human kings hunt magic users who will not serve." },
+          { key: "god-xyrrak", kind: "Outsider", name: "Xyrrak the Corruptor", line: "An Outsider, the corrupter: the voice in the shadows that offers forbidden truths at a terrible price. The whispering idol that nearly took the party bore his symbol, carved into black stone." },
+          { key: "god-nytheris", kind: "Born of the Eclipse", name: "Nytheris the Veilspinner", line: "Child of Vaelis of the Divine Family and Korynth the Outsider, born of the Eclipse itself: neither wholly of the ordered gods nor wholly of the chaos that came through the rift. The Veilspinner walks between." }
+        ];
+        var peoples = [
+          { key: "species-humans", name: "Humans", line: "The most expansionist people in Caldaryn. They arrived from another continent within living memory of the elves and have not slowed since, building city-states that tax, expand, and press into dwarven, elven, and halfling lands. Their rulers persecute magic users, unless those users serve." },
+          { key: "species-dwarves", name: "Dwarves", line: "A proud, resilient people bound to mountains and earth, dwelling in the Deepholds, vast cities carved into the peaks. Unparalleled smiths and stoneworkers, slow to trust and unwavering once given. Thargrim the Forgefather guides them." },
+          { key: "species-elves", name: "Elves", line: "Ancient, long-lived, and forest-dwelling, attuned to nature and to magic in ways that make humans nervous. Their homeland is the Veilgrove Forest, and the Emerald Glades are a named region within it. The elves are its stewards, and of late they are vanishing deeper into the trees." },
+          { key: "species-halflings", name: "Halflings", line: "Cheerful, resourceful folk of strong community, dwelling in quiet villages among rolling hills and riverbanks, Hearthhaven first among them. Overlooked by the great powers, which suits them. They worship Yelna the Hearthmother." },
+          { key: "drow", name: "Drow", line: "A people of the dark places, said to fuse with spiders and to fear the sun as a vampire does. To see one above ground in daylight would be unheard of. The party has met their traces in ruins and deep places, and no more than that is certain." },
+          { key: "species-gnomes", name: "Gnomes", line: "Gnomes exist in Caldaryn. The setting notes confirm them plainly and say little more that the party has yet encountered, so this page does the same." }
+        ];
+        var places = [
+          { key: "place-oakrest", map: "oakrest", kind: "Home", name: "Oakrest", line: "Where the story began: a frontier town of about 800 souls at the edge of the Veilgrove, founded as a logging camp around 650 BE and grown on timber, metalwork, and trade. The Everlight Lantern burns in its square, the Forge makes its living, and Warden Roderic Vale and Elder Myra govern it." },
+          { key: "place-veilgrove", map: null, kind: "The wilds at home", name: "The Veilgrove Forest", line: "The ancient woodland Danuviel planted around 1000 BE, saturated with natural magic, where the barrier between mortal and divine runs thin. It is the elven homeland; the Emerald Glades are a named region inside it. Oakrest\u2019s old pact with Lunara\u2019s wolves was made at its edge." },
+          { key: "place-solren", map: null, kind: "South, on the road", name: "Solren", line: "A great human city of some 11,000, about a week on foot from Oakrest, or about four days by boat. Its Starforge, a floating forge lit by enchanted light, makes the finest arms in the region. Lord Nethor rules Solren: he answers to the city\u2019s Merchant Council, but the final decision is his, and the Secret Council of Smiths, who oversee the Starforge, holds sway with the merchants." },
+          { key: "place-fenwatch", map: null, kind: "North, on the road", name: "Fenwatch", line: "A busy trade town where the roads meet the river, home to counting houses like the Copperveins\u2019 and the Split Oar tavern, where travelers from three cities told the same story about Oakrest iron. The courier job that changed everything was taken here." },
+          { key: "place-seaward", map: "seaward", kind: "The eastern coast", name: "Seaward", line: "A small, windswept fishing village on the eastern coast, founded when a divine figure guided its first settlers through a great storm. Elder Taren Clifftide leads it, and its fishers keep the rites of Neriath, the sea demigod." },
+          { key: "place-karak-torun", map: null, kind: "The eastern coast", name: "Karak Torun", line: "The Forge of Kings: a mighty dwarven stronghold on an island off the eastern coast, as the map of Caldaryn shows it. Seat of the Forge-King, keeper of the deepest forges, and source of the realm\u2019s finest arms, armor, and worked mithril." },
+          { key: "place-ashenport", map: null, kind: "The southern coast", name: "Ashenport", line: "A bustling port city south of Solren, named for its gray cliffs and sea mist, governed by the Mariner\u2019s Council and proud of its shipyards, which are second to none. It is Solren\u2019s rival for trade, and it fiercely resists Solren\u2019s influence." },
+          { key: "place-starfall-lake", map: null, kind: "On the party\u2019s road", name: "Starfall Lake", line: "A broad, dark lake the party crossed by night on the 4th of Dawnsow, ferried by Harlan Vaughn. A riderless horse eating human bones waited on its shore, a cursed dagger buried in its flank, and Parnassus caught the fish that carried Yelna\u2019s pendant." },
+          { key: "place-thalanthir", map: null, kind: "East of Fenwatch", name: "Thalanthir", line: "A settlement known as a gathering place for old scholars, relic hunters, and cloistered folk with an unhealthy interest in dead empires. The sealed crate the party was hired to carry was bound for Thalanthir, before the party decided otherwise." },
+          { key: "place-ashen-hollows", map: null, kind: "Where the party stands", name: "The Ashen Hollows", line: "The seat of Naevor Athzin of the Hallow Helm when she is not wandering. The party reached its lip at dawn on the 9th of Dawnsow, carrying the child to her, and Drazhic\u2019s challenge went unanswered." }
+        ];
+        var history = [
+          { date: "c. 1200 BE", title: "The Shaping of the Peaks", line: "Thargrim strikes the earth with his hammer, raising the Obsidian Peaks and founding the Deepholds for the dwarves. The sources call this the beginning of organized civilization and divine influence among mortals.", chips: primerLoreChip("place-obsidian-peaks") },
+          { date: "c. 1000 BE", title: "The Veilgrove is planted", line: "Danuviel plants the Veilgrove Forest, a sanctuary for the elves and a lasting symbol of natural harmony, in the age the records call the Age of Balance.", chips: primerLoreChip("history-creation-veilgrove") },
+          { date: "750\u2013700 BE", title: "The War of Stone and Iron", line: "Humans, under Vorgrath\u2019s influence, war on the dwarves for the iron, mithril, and gold of the Peaks, and the war lasts that whole span. Elanor Brightquill\u2019s chronicle of 744 BE is her own firsthand account, written from inside it. The war ends in a fragile alliance of dwarves and elves, and divisions that have never healed.", chips: primerLoreChip("history-war-stone-iron") },
+          { date: "Year 0", title: "The Eclipse", line: "The sun and the twin moons Lunaris and Myrieth align, the skies darken, and a rift tears open in reality. Through it come the Outsiders. The Divine Family\u2019s unity fractures, cults to the Outsiders form, magic runs uncontrolled, and Nytheris is born. Every year since is counted from this day.", chips: primerLoreChip("history-eclipse") },
+          { date: "c. 86\u201391 AE", title: "Sela is lost near Fenwatch", line: "Sela, a quiet, honest cloth merchant, is lost on the road north of Fenwatch: his wagon found overturned, his body never recovered. Fenwatch accepts him dead and his widow leaves with the children. What became of him is a live question on the party\u2019s road again.", chips: primerLoreChip("place-fenwatch") },
+          { date: "c. 91 AE", title: "Umberland vanishes; the couriers begin", line: "Lord Sheamus Umberland disappears, and his supply line begins its strange run: a courier bearing a simple iron oak-leaf token every ten to twelve weeks, never the same face twice, provisioned in Fenwatch by Sylvin Coppervein, who asks no questions and answers none.", chips: primerLoreChip("org-oak-leaf-couriers") },
+          { date: "101 AE", title: "The road begins", line: "A century after the Eclipse, in the planting month of Greenswell, a small company is blessed at Oakrest\u2019s Festival of Seeds. Everything after that is the Chronicle, and it is still being written.", chips: primerViewChip("chronicle", "Read the Chronicle") }
+        ];
+        var beats = [
+          { date: "8th of Greenswell", title: "The Festival of Seeds", line: "Oakrest closes the planting season beneath the Everlight Lantern, and the company is publicly blessed in the square. The next morning, the road begins." },
+          { date: "9th of Greenswell", title: "The pact, the idol, the forge fire", line: "Lunara, the great wolf, shows the party the old pact between Oakrest and the forest, and how the Cult of the Spiral poisoned it. In the blacksmith\u2019s shed the whispering idol nearly takes Ivy; Loryn Farrow hurls it into the forge fire because she told him to, crying for him to unmake it. The cult breaks. But Granny Widdershins\u2019 telling is the one that matters: the fire married the whisper to the forge, and to all the iron worked since." },
+          { date: "10th to 13th of Greenswell", title: "Anya, the tower, and Naevor at the gate", line: "Anya, who heard the voice first, flees west and is killed at the ruined watchtower; by morning her body is gone, a spiral burned into the earth where she fell. Elias, who carried the idol, is found dead with no wound on him. Naevor Athzin of the Hallow Helm comes to Oakrest, takes the tainted lantern, and names the Ashen Hollows as the place she can be found." },
+          { date: "12th of Greenswell and after", title: "The ambush and the black ichor", line: "Hallow Helm mercenaries in sealed iron helms ambush the party on a granite ridge, and pour black ichor down the throats of the fallen. It saves them, and it begins to work on them: craving, cold emptiness, a severed warmth. Lanna of the Root and Hollow names it plainly: not a conduit, a scout, something reaching out through whoever takes it in." },
+          { date: "Greenswell, on the road", title: "Solren, the circus, Fenwatch", line: "The road runs south to Solren, its Starforge, sewers, and bounty talk at the Barrow\u2019s Lid, then north again: the Painted Ring Circus crossed at a flooded river, and Fenwatch, where Sylvin Coppervein makes contact and the Split Oar\u2019s travelers all tell the same story, Oakrest iron blackening and spoiling in three cities at once." },
+          { date: "1st of Dawnsow", title: "The Courier Job", line: "The party is hired to carry a sealed crate north toward Thalanthir. The crate hums. Its quiet begins to fail. Something thin takes to following the party, and does not stop." },
+          { date: "4th of Dawnsow", title: "Starfall Lake, and a decision", line: "On the road: a fork ambush, a search for Sela, and Sylvin\u2019s confidences. At Starfall Lake, the cursed dagger is drawn from a dead horse\u2019s flank and takes Ivy\u2019s hand before it is mastered. The party decides the box does not go to Thalanthir. It goes to Naevor." },
+          { date: "8th of Dawnsow", title: "The Dryad\u2019s Glade: the crate is opened", line: "In the dryad\u2019s glade, safe from the wraith by the forest\u2019s own ways, the crate is opened. Inside, held in time-stasis apart from hunger, thirst, and time itself: a living newborn girl. It appears she is an elf. Trillik speaks the Shadowborn verse over her: a mortal touched by all gods, destined to reshape the world." },
+          { date: "9th of Dawnsow", title: "The Burl, the caravan, the Hollows", line: "At Granny Widdershins\u2019 Burl, the party answers three questions standing at the door, receives a skin of warm milk for the child, and leaves owing the house a true tale, told all the way to the end. On the road they meet a caravan with a curtained litter. At dawn they stand at the lip of the Ashen Hollows. That is where you join them." }
+        ];
+
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title">New Player Primer</h2>'
+          + '<div class="primer-lead"><p data-st="primer.intro">' + esc(siteText("primer.intro")) + "</p></div>"
+          + syncNoticeHtml()
+          + '<nav class="primer-toc" aria-label="Primer contents">'
+          + '<button type="button" class="chip" data-primer-jump="primer-start">Start here</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-world">The world in one page</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-where">Where you are</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-gods">The Gods</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-peoples">The peoples</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-places">Places that matter</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-history">Recent history</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-party">The party so far</button>'
+          + '<button type="button" class="chip" data-primer-jump="primer-guide">How to use this site</button>'
+          + "</nav>"
+
+          + '<section class="primer-section" id="primer-start" aria-label="Start here"><h3>Start here</h3>'
+          + '<p data-st="primer.start">' + esc(siteText("primer.start")) + "</p>"
+          + '<ol class="primer-steps">'
+          + "<li><strong>Read this page.</strong> It is the whole briefing: the world, the gods, the peoples, the places, and the story so far, in about ten minutes.</li>"
+          + "<li><strong>Then read the story.</strong> The Chronicle tells the campaign as it happened, newest first; the Timeline puts everything, deep history and the party\u2019s days alike, in order.</li>"
+          + "<li><strong>Then just play.</strong> The open questions are kept in Mysteries, and you do not need to solve any of them before your first session. The party is mid-road and mid-danger; joining it is the point.</li>"
+          + "</ol>"
+          + '<div class="tl-links">' + primerViewChip("chronicle", "The Chronicle") + primerViewChip("timeline", "The Timeline") + primerViewChip("mysteries", "Open Mysteries") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-world" aria-label="The world in one page"><h3>The world in one page</h3>'
+          + "<p>Caldaryn is the known continent: a realm of divided kingdoms, sprawling wilds, and ancient ruins whispered about in stories. Most folk live simple lives in small villages, toiling the fields and keeping to old traditions. Beyond the safety of the village walls the world is dangerous: shadowy forests, crumbling towers, wild beasts, and things older than any of them. Occasionally a merchant passes through with news. That is usually enough.</p>"
+          + "<p>Human Caldaryn is a patchwork of fiercely independent city-states, each jealous of its walls, its trade, and its gods, cooperating only when profit or danger demands it. The older peoples were here first: dwarves in their mountain Deepholds, elves in the great forest, halflings in their hearth villages. Humans arrived from another continent and have pressed into their lands ever since. Within the last hundred years the open war between humans and the demi-humans stopped; what followed is a cessation of hostilities, not a peace, and everyone old enough knows the difference.</p>"
+          + "<p>The years are counted from the Eclipse: BE before it, AE after it, the Eclipse itself year 0, and the year now is 101 AE. The year holds twelve months of thirty days on a six-day week. The party\u2019s road began in Greenswell, the planting month, and has reached Dawnsow, the growing season. Overhead turn the twin moons, Lunaris and Myrieth, and their behavior is watched closely, because the Second Eclipse prophecy says to watch it.</p>"
+          + '<div class="tl-links">' + primerLoreChip("place-caldaryn") + primerLoreChip("history-calendar") + primerLoreChip("history-ages") + primerLoreChip("org-city-states") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-where" aria-label="Where you are"><h3>Where you are</h3>'
+          + "<p>The road is at dawn on the 9th of Dawnsow, Year 101 AE, the day shown at the top of every page of this site, which moves forward as the story does. The party stands at the lip of the Ashen Hollows with a newborn in arms, a cursed dagger in a pack, a wraith behind, and a zealot ahead: Naevor Athzin, to whom the party decided to bring the child. For scale, home is far behind: Oakrest to Solren is about a week on foot, or about four days by boat, and the party has walked most of that axis, and beyond, to get here.</p>"
+          + '<div class="tl-links">' + primerMapChip("caldaryn") + primerMapChip("oakrest") + primerMapChip("seaward") + primerLoreChip("place-ashen-hollows") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-gods" aria-label="The Gods"><h3>The Gods</h3>'
+          + "<p>Caldaryn\u2019s counted pantheon is ten. Six are the Divine Family, the old gods of the world, who shaped its peaks and forests and squabble like any family. Three are the Outsiders, who came through the rift the Eclipse tore in year 0 and were never meant to be here. The tenth, Nytheris, was born of the Eclipse itself, one parent from each side. Beyond the ten, Seaward keeps Neriath, a demigod of the sea: not one of the counted gods, honored at her Driftwood Shrine and in the Storm Lantern Vigil, and her lore will grow if the party crosses her path.</p>"
+          + '<div class="primer-cards">';
+        gods.forEach(function (g) {
+          html += primerCard(g.kind, g.name, g.line, primerLoreChip(g.key, "Full article"));
+        });
+        html += "</div>"
+          + '<div class="tl-links">' + primerLoreChip("god-neriath", "Neriath, demigod of the sea") + primerLoreChip("the-outsider-gods") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-peoples" aria-label="The peoples of Caldaryn"><h3>The peoples of Caldaryn</h3>'
+          + "<p>Four peoples share the continent openly, and others keep to its dark and hidden places. What follows is what any traveler on the road would know.</p>"
+          + '<div class="primer-cards">';
+        peoples.forEach(function (p) {
+          html += primerCard("People of Caldaryn", p.name, p.line, primerLoreChip(p.key, "Full article"));
+        });
+        html += "</div></section>"
+
+          + '<section class="primer-section" id="primer-places" aria-label="Places that matter"><h3>Places that matter</h3>'
+          + "<p>The party\u2019s road runs on one axis: Oakrest at its heart, Solren to the south, Fenwatch to the north, and the wilds off every side road. These are the names that keep coming up.</p>"
+          + '<div class="primer-cards">';
+        places.forEach(function (pl) {
+          html += primerCard(pl.kind, pl.name, pl.line, primerLoreChip(pl.key, "Full article") + (pl.map ? primerMapChip(pl.map) : ""));
+        });
+        html += "</div>"
+          + '<div class="tl-links">' + primerMapChip("caldaryn", "See them all on the map of Caldaryn") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-history" aria-label="Recent history that matters"><h3>Recent history that matters</h3>'
+          + "<p>Caldaryn\u2019s deep past runs back twelve centuries and is kept in full on the Timeline. These are the pieces of it the party\u2019s story actually leans on.</p>"
+          + '<ol class="primer-beats">';
+        history.forEach(function (h) {
+          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(h.date) + '</span> <span class="b-title">' + esc(h.title) + "</span><br>" + esc(h.line)
+            + (h.chips ? '<span class="tl-links" style="display:flex">' + h.chips + "</span>" : "") + "</li>";
+        });
+        html += "</ol>"
+          + '<div class="tl-links">' + primerViewChip("timeline", "The full Timeline") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-party" aria-label="The party so far"><h3>The party so far</h3>'
+          + "<p>These are the Heroes of Oakrest as the road has made them. Tap any card for the full entry.</p>";
+        if (heroes.length > 0) {
+          html += '<div class="grid2" style="margin-top:1rem">';
+          heroes.forEach(function (p) { html += personCard(p, true); });
+          html += "</div>";
+        } else if (dataLoaded) {
+          html += '<p class="small muted" style="margin-top:0.75rem">The heroes could not be loaded. Live sync is not connected.</p>';
+        }
+        if (companions.length > 0) {
+          html += '<p style="margin-top:1.25rem">Travelling with them: ' + companions.map(function (p) { return esc(p.name); }).join(", ") + ", each with an entry of their own in People.</p>";
+        }
+        html += "<p>The story, in its major beats:</p>"
+          + '<ol class="primer-beats">';
+        beats.forEach(function (b) {
+          html += '<li><span class="dot" aria-hidden="true"></span><span class="b-date">' + esc(b.date) + ', 101 AE</span> <span class="b-title">' + esc(b.title) + "</span><br>" + esc(b.line) + "</li>";
+        });
+        html += "</ol>"
+          + "<p>What the party carries into the Hollows: a newborn who must be kept unclaimed, a cursed dagger that travels with them whether they like it or not, a wraith still following, and a true tale owed to Granny\u2019s house. The full list of what is still open is kept in Mysteries.</p>"
+          + '<div class="tl-links">' + primerViewChip("chronicle", "The Chronicle, in full") + primerViewChip("mysteries", "Open Mysteries") + primerViewChip("people", "Everyone in People") + "</div></section>"
+
+          + '<section class="primer-section" id="primer-guide" aria-label="How to use this site"><h3>How to use this site</h3>'
+          + '<div class="primer-guide">'
+          + primerCard("", "Primer", "This page. The orientation briefing: start here whenever you need the shape of the whole thing again.", primerViewChip("primer", "You are here"))
+          + primerCard("", "Wiki", "The full lore library: every place, god, people, organization, item, and prophecy with an article, searchable and browsable by category. Everything named on this page has its full entry there.", primerViewChip("wiki", "Open the Wiki"))
+          + primerCard("", "Chronicle", "The story so far, as it happened, newest first: the session-by-session record of the campaign, Greenswell through Dawnsow.", primerViewChip("chronicle", "Open the Chronicle"))
+          + primerCard("", "Timeline", "Everything in order, oldest first: the deep history of Caldaryn from the Shaping of the Peaks through the Eclipse, and then the party\u2019s days in 101 AE, each moment linking back to its Chronicle entry or article.", primerViewChip("timeline", "Open the Timeline"))
+          + primerCard("", "People", "Everyone: the heroes, their companions of the road, and the people of Caldaryn they have met, each with a portrait and an entry.", primerViewChip("people", "Open People"))
+          + primerCard("", "Maps", "The maps of Caldaryn, Oakrest, and Seaward, with numbered pins for the places that matter. Drag to pan; zoom with the mouse wheel, the bar at the bottom of the map, the plus and minus buttons, or a pinch. Tap a pin for its note and its article.", primerMapChip("caldaryn", "Open the maps"))
+          + primerCard("", "Mysteries", "The open threads: every question the party has not answered yet, from the wraith that follows to what became of Sela. Settled threads are kept there too, marked as settled.", primerViewChip("mysteries", "Open Mysteries"))
+          + primerCard("", "GM Sign In", "The GM\u2019s door, in the menu at the top. Some content is GM-only and sits behind a passcode; players never need it, and nothing a player needs is behind it.", "")
+          + "</div></section>"
+          + "</div>";
+        main.innerHTML = html;
+
+        var loreBtns = main.querySelectorAll("[data-primer-lore]");
+        for (var i = 0; i < loreBtns.length; i++) loreBtns[i].addEventListener("click", function () {
+          var e = loreByKey(this.getAttribute("data-primer-lore"));
+          if (e) { state.reader = { kind: "lore", entry: e }; state.view = "wiki"; render(); window.scrollTo(0, 0); }
+        });
+        var mapBtns = main.querySelectorAll("[data-primer-map]");
+        for (var j = 0; j < mapBtns.length; j++) mapBtns[j].addEventListener("click", function () {
+          var k = this.getAttribute("data-primer-map");
+          if (!MAPS[k]) return;
+          state.view = "maps"; state.mapKey = k; state.mapStack = [];
+          state.selectedPinId = null; state.selectedMarkerId = null; state.focusPinId = null; state.reader = null;
+          render(); window.scrollTo(0, 0);
+        });
+        var viewBtns = main.querySelectorAll("[data-primer-view]");
+        for (var k2 = 0; k2 < viewBtns.length; k2++) viewBtns[k2].addEventListener("click", function () {
+          state.view = this.getAttribute("data-primer-view");
+          state.reader = null;
+          render(); window.scrollTo(0, 0);
+        });
+        var jumpBtns = main.querySelectorAll("[data-primer-jump]");
+        for (var m2 = 0; m2 < jumpBtns.length; m2++) jumpBtns[m2].addEventListener("click", function () {
+          var target = document.getElementById(this.getAttribute("data-primer-jump"));
+          if (target) target.scrollIntoView({ block: "start" });
         });
         wireCards(main);
         decorateSiteText(main);
