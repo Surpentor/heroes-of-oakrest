@@ -1191,7 +1191,11 @@
         // size they dwarfed the icons and names printed on the map
         // itself. A GM can resize any of them individually (see
         // openSizeDialog); a stored size always wins over this default.
-        return isFinite(v) && v >= 0.4 && v <= 2.5 ? v : 0.75;
+        // The accepted floor is 0.1, not 0.4: a hex cell is only about
+        // 1.6% of the map's width, so even the old 40% minimum left a
+        // pin wider than one hex. 10% lets an item shrink until it
+        // sits inside a single hex cell.
+        return isFinite(v) && v >= 0.1 && v <= 2.5 ? v : 0.75;
       }
       function setItemSize(kind, id, factor) {
         MAP_EXTRAS.sizes[kind + "-" + id] = Math.round(factor * 100) / 100;
@@ -1372,6 +1376,11 @@
       }
       function iconSrc(iconKey) {
         if (!iconKey) return null;
+        // The party token is a bundled asset: a group of adventurer
+        // silhouettes. It always wins over any stored icon row for the
+        // "party-token" key, so the party marker, its context-menu
+        // entry, and every preview of it show the same artwork.
+        if (iconKey === "party-token") return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPCEtLSBQYXJ0eSB0b2tlbjogc2lsaG91ZXR0ZXMgb2YgZm91ciBhZHZlbnR1cmVycyBzdGFuZGluZyB0b2dldGhlci4KICAgICAgIEFyY2hlciB3aXRoIGEgZHJhd24gYm93IChsZWZ0KSwgc3dvcmRzbWFuIHdpdGggc2hpZWxkIGFuZCBhIHN3b3JkCiAgICAgICByYWlzZWQgc3RyYWlnaHQgdXAgKGNlbnRlciksIG1hZ2Ugd2l0aCBwb2ludGVkIGhhdCBhbmQgc3RhZmYKICAgICAgIChyaWdodCksIGFuZCBhIHNtYWxsIGhvb2RlZCByb2d1ZSBpbiBmcm9udC4gT25lIGRhcmsgaW5rIGNvbG91cgogICAgICAgdGhyb3VnaG91dCBzbyB0aGUgZ3JvdXAgcmVhZHMgYXMgYSBzaW5nbGUgc2lsaG91ZXR0ZSBhdCBtYXAgc2l6ZSwKICAgICAgIHdpdGggZ2FwcyBvZiBiYWNrZ3JvdW5kIGJldHdlZW4gdGhlIGZpZ3VyZXMgdG8ga2VlcCB0aGVtIGFwYXJ0LiAtLT4KICA8ZyBmaWxsPSIjMmUyNDFhIiBzdHJva2U9IiMyZTI0MWEiPgogICAgPCEtLSBhcmNoZXI6IGJvdyBhbmQgc3RyaW5nIC0tPgogICAgPHBhdGggZD0iTTUgMTggUTEuMiAzMSA1IDQ0IiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjIuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgICA8cGF0aCBkPSJNNSAxOCBMNSA0NCIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIwLjkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogICAgPCEtLSBhcmNoZXI6IGFycm93IG5vY2tlZCwgcG9pbnRpbmcgbGVmdCAtLT4KICAgIDxwYXRoIGQ9Ik0xMyAzMCBMNS41IDMwIiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgICA8IS0tIGFyY2hlcjogaG9vZCBwZWFrIGFuZCBoZWFkIC0tPgogICAgPGNpcmNsZSBjeD0iMTAuNSIgY3k9IjIxIiByPSIzLjgiIHN0cm9rZT0ibm9uZSIvPgogICAgPHBhdGggZD0iTTcuMiAxOC42IFE5IDEzLjIgMTMgMTYuMiBRMTAuNCAxNi42IDcuMiAxOC42IFoiIHN0cm9rZT0ibm9uZSIvPgogICAgPCEtLSBhcmNoZXI6IGNsb2FrIC0tPgogICAgPHBhdGggZD0iTTQuOCA1NSBMNi4yIDM0IFE2LjggMjYuOCAxMC41IDI2LjQgUTE0LjIgMjYuOCAxNC44IDM0IEwxNiA1NSBaIiBzdHJva2U9Im5vbmUiLz4KCiAgICA8IS0tIHN3b3Jkc21hbjogc3dvcmQgcmFpc2VkIHN0cmFpZ2h0IHVwIC0tPgogICAgPHBhdGggZD0iTTMxLjUgMjYuNSBMMzMgMy42IEwzNC41IDI2LjUgWiIgc3Ryb2tlPSJub25lIi8+CiAgICA8cGF0aCBkPSJNMjkuOCAyNi41IEwzNi4yIDI2LjUiIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMi4xIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICAgIDxwYXRoIGQ9Ik0zMC44IDI4LjUgTDMyLjggMjYuOCIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogICAgPCEtLSBzd29yZHNtYW46IGhlbG1ldCBjcmVzdCBhbmQgaGVhZCAtLT4KICAgIDxjaXJjbGUgY3g9IjI2IiBjeT0iMTkiIHI9IjQuMiIgc3Ryb2tlPSJub25lIi8+CiAgICA8cGF0aCBkPSJNMjIuOCAxNi40IFEyNiAxMSAyOS4yIDE2LjQgUTI2IDE0LjkgMjIuOCAxNi40IFoiIHN0cm9rZT0ibm9uZSIvPgogICAgPCEtLSBzd29yZHNtYW46IHRvcnNvLCB0aGVuIHR3byBsZWdzIHdpdGggYSBnYXAgLS0+CiAgICA8cGF0aCBkPSJNMjAuNiA0MiBMMjEuNCAzMi41IFEyMS45IDI1LjYgMjYgMjUuMiBRMzAuMSAyNS42IDMwLjYgMzIuNSBMMzEuNCA0MiBaIiBzdHJva2U9Im5vbmUiLz4KICAgIDxwYXRoIGQ9Ik0yMS42IDQyIEwyNC45IDQyIEwyNC42IDU1IEwyMS45IDU1IFoiIHN0cm9rZT0ibm9uZSIvPgogICAgPHBhdGggZD0iTTI3LjEgNDIgTDMwLjQgNDIgTDMwLjEgNTUgTDI3LjQgNTUgWiIgc3Ryb2tlPSJub25lIi8+CiAgICA8IS0tIHN3b3Jkc21hbjogc2hpZWxkIG9uIHRoZSBsZWZ0IGFybSAtLT4KICAgIDxwYXRoIGQ9Ik0xNi44IDI4LjUgUTIxIDI3IDIyLjIgMjkuNiBMMjIuMiA0MC41IFExOS41IDQ1LjggMTYuOCA0MC41IFoiIHN0cm9rZT0ibm9uZSIvPgoKICAgIDwhLS0gbWFnZTogc3RhZmYgYW5kIG9yYiAtLT4KICAgIDxwYXRoIGQ9Ik01Ni41IDEzLjUgTDU2LjUgNTUiIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICAgIDxjaXJjbGUgY3g9IjU2LjUiIGN5PSIxMCIgcj0iMy4xIiBzdHJva2U9Im5vbmUiLz4KICAgIDxjaXJjbGUgY3g9IjYxIiBjeT0iMTciIHI9IjEuMSIgc3Ryb2tlPSJub25lIi8+CiAgICA8IS0tIG1hZ2U6IGFybSByZWFjaGluZyB0byB0aGUgc3RhZmYgLS0+CiAgICA8cGF0aCBkPSJNNTAuNSAzMS41IEw1Ni4yIDI5LjUiIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgICA8IS0tIG1hZ2U6IHBvaW50ZWQgaGF0IGFuZCBicmltIC0tPgogICAgPHBhdGggZD0iTTQwLjUgMTUuNSBMNDUuNiAzLjQgUTQ2LjIgMS44IDQ3LjkgMi41IEw1MSAxNS41IFE0NS43IDEzLjIgNDAuNSAxNS41IFoiIHN0cm9rZT0ibm9uZSIvPgogICAgPGVsbGlwc2UgY3g9IjQ1LjciIGN5PSIxNi44IiByeD0iNyIgcnk9IjEuOSIgc3Ryb2tlPSJub25lIi8+CiAgICA8IS0tIG1hZ2U6IGhlYWQgYW5kIGJlYXJkIC0tPgogICAgPGNpcmNsZSBjeD0iNDUuNyIgY3k9IjIxLjUiIHI9IjMuNyIgc3Ryb2tlPSJub25lIi8+CiAgICA8cGF0aCBkPSJNNDIuNyAyMy41IEw0NS43IDMyLjUgTDQ4LjcgMjMuNSBRNDUuNyAyNiA0Mi43IDIzLjUgWiIgc3Ryb2tlPSJub25lIi8+CiAgICA8IS0tIG1hZ2U6IHJvYmUgLS0+CiAgICA8cGF0aCBkPSJNMzguNiA1NSBMNDAuNiAzMC41IFE0MS4xIDI1LjIgNDUuNyAyNC44IFE1MC4zIDI1LjIgNTAuOCAzMC41IEw1Mi44IDU1IFoiIHN0cm9rZT0ibm9uZSIvPgoKICAgIDwhLS0gcm9ndWU6IHNtYWxsIGhvb2RlZCBmaWd1cmUgc3RhbmRpbmcgaW4gZnJvbnQgLS0+CiAgICA8Y2lyY2xlIGN4PSIzNC41IiBjeT0iMzgiIHI9IjMuNCIgc3Ryb2tlPSJub25lIi8+CiAgICA8cGF0aCBkPSJNMzEuOSAzNS44IFEzMy42IDMxLjQgMzYuOSAzNC4zIFEzNC43IDM0LjYgMzEuOSAzNS44IFoiIHN0cm9rZT0ibm9uZSIvPgogICAgPHBhdGggZD0iTTMwIDU1IEwzMSA0NSBRMzEuNSAzOS44IDM0LjUgMzkuNCBRMzcuNSAzOS44IDM4IDQ1IEwzOSA1NSBaIiBzdHJva2U9Im5vbmUiLz4KCiAgICA8IS0tIGdyb3VuZCBsaW5lIC0tPgogICAgPHBhdGggZD0iTTYgNTYuNSBINTgiIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8L2c+Cjwvc3ZnPgo=";
         for (var i = 0; i < ICONS.length; i++) if (ICONS[i].key === iconKey) return ICONS[i].src;
         return null;
       }
@@ -4747,8 +4756,9 @@
       function sizeControlHtml(prefix, factor) {
         var pct = Math.round(factor * 100);
         return '<label class="gm-field"><span>Size: <span id="' + prefix + 'SizeVal">' + pct + '%</span></span>'
-          + '<input type="range" id="' + prefix + 'Size" min="40" max="200" step="5" value="' + pct + '"></label>'
+          + '<input type="range" id="' + prefix + 'Size" min="10" max="200" step="5" value="' + pct + '"></label>'
           + '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.25rem">'
+          + '<button type="button" class="ghost-btn" data-sizepreset="' + prefix + '" data-sizeval="0.2">Tiny</button>'
           + '<button type="button" class="ghost-btn" data-sizepreset="' + prefix + '" data-sizeval="0.5">Small</button>'
           + '<button type="button" class="ghost-btn" data-sizepreset="' + prefix + '" data-sizeval="0.75">Medium</button>'
           + '<button type="button" class="ghost-btn" data-sizepreset="' + prefix + '" data-sizeval="1">Large</button>'
@@ -5054,7 +5064,7 @@
         var startFactor = itemSize(kind, id);
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
-          + '<p class="small muted" style="margin-top:0.375rem">Drag the slider and watch the item change on the map behind this box. The size is its own, on top of how it already grows and shrinks with the map zoom. 100% is the old full size; pins and markers now start at 75%.</p>'
+          + '<p class="small muted" style="margin-top:0.375rem">Drag the slider and watch the item change on the map behind this box. The size is its own, on top of how it already grows and shrinks with the map zoom. 100% is the old full size; pins and markers now start at 75%. The slider goes down to 10%, small enough for an item to fit inside a single hex on the map.</p>'
           + sizeControlHtml("dlg", startFactor)
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
           + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSaveSize">Save size</button><button type="button" class="btn btn-outline" id="dlgCancelSize">Cancel</button></div></div>';
@@ -5150,7 +5160,7 @@
           var inCat = ICONS.filter(function (ic) { return ic.category === cat; });
           if (inCat.length === 0) return;
           html += '<p class="ctx-group" data-group="' + esc(cat) + '">' + esc(cat) + "</p>";
-          inCat.forEach(function (ic) { html += '<button type="button" class="ctx-item" data-icon="' + esc(ic.key) + '"><img class="ctx-thumb" src="' + esc(ic.src) + '" alt="" draggable="false"><span class="ctx-label">' + esc(ic.name) + "</span></button>"; });
+          inCat.forEach(function (ic) { html += '<button type="button" class="ctx-item" data-icon="' + esc(ic.key) + '"><img class="ctx-thumb" src="' + esc(iconSrc(ic.key) || ic.src) + '" alt="" draggable="false"><span class="ctx-label">' + esc(ic.name) + "</span></button>"; });
         });
         list.innerHTML = html;
         document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
@@ -5376,7 +5386,7 @@
           ICONS.forEach(function (ic) {
             var armed = state.pendingIconKey === ic.key;
             html += '<div class="icon-cell' + (armed ? " armed" : "") + '" draggable="true" data-iconcell="' + esc(ic.key) + '" data-search="' + esc((ic.category + " " + ic.name).toLowerCase()) + '" role="button" tabindex="0" aria-pressed="' + armed + '" title="' + esc(ic.category + ": " + ic.name) + '">'
-              + '<img src="' + esc(ic.src) + '" alt="" draggable="false">'
+              + '<img src="' + esc(iconSrc(ic.key) || ic.src) + '" alt="" draggable="false">'
               + "<span>" + esc(ic.name) + "</span></div>";
           });
           html += "</div>"
