@@ -232,6 +232,25 @@
       .thread-card { display: flex; flex-direction: column; align-items: stretch; height: 100%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
       .thread-card.settled { background: var(--surface-alt); opacity: 0.85; }
       .thread-card h3, .thread-card h4 { font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0 0 0.375rem; }
+      .thread-card { scroll-margin-top: 8.5rem; }
+      .thread-head { display: flex; align-items: flex-start; gap: 0.5rem; }
+      .thread-head h3, .thread-head h4 { flex: 1 1 auto; min-width: 0; }
+      .thread-toggle { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; min-height: 2.25rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-alt); color: var(--text); cursor: pointer; padding: 0; font: inherit; }
+      .thread-toggle:hover, .thread-toggle:focus-visible { border-color: var(--gold); }
+      .thread-toggle .chev { display: block; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin-top: -0.18rem; transition: transform 0.15s ease, margin 0.15s ease; }
+      .thread-toggle[aria-expanded="false"] .chev { transform: rotate(-45deg); margin-top: 0; margin-left: -0.18rem; }
+      .thread-body[hidden] { display: none; }
+      /* Mysteries quick nav */
+      .thread-nav { margin-top: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0.875rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+      .thread-nav-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.375rem 0.75rem; }
+      .thread-nav-label { margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+      .thread-nav-all .ghost-btn { padding: 0.25rem 0.625rem; font-size: 0.8125rem; }
+      ul.thread-nav-list { list-style: none; margin: 0.625rem 0 0; padding: 0; display: grid; gap: 0.125rem; }
+      ul.thread-nav-list li { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+      ul.thread-nav-list .status-pill { flex: 0 0 auto; margin-top: 0; }
+      button.thread-jump { border: 0; background: none; padding: 0.25rem 0; cursor: pointer; font: inherit; font-size: 0.9375rem; color: var(--teal); text-align: left; overflow-wrap: break-word; }
+      button.thread-jump:hover, button.thread-jump:focus-visible { text-decoration: underline; }
+      .thread-nav-submit { margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
       .stack { display: grid; gap: 0.75rem; align-items: stretch; }
       .stack > * { min-width: 0; }
 
@@ -390,7 +409,7 @@
       .gm-secret-card h3, .gm-secret-card h4 { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; line-height: 1.3; margin: 0 0 0.375rem; }
       nav.sections button.gm-nav { color: var(--teal); font-weight: 600; }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-      @media (prefers-reduced-motion: reduce) { .map-pin, .pin-head, .pin-ring { animation: none; } }
+      @media (prefers-reduced-motion: reduce) { .map-pin, .pin-head, .pin-ring { animation: none; } .thread-toggle .chev { transition: none; } }
     
       /* Map editing: context menu, locks, drag and drop */
       .map-ctx { position: fixed; z-index: 90; min-width: 13.5rem; max-width: min(19rem, calc(100vw - 1rem)); max-height: min(70dvh, 30rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 28px rgba(0,0,0,0.6); padding: 0.375rem; }
@@ -1372,6 +1391,7 @@
         addHidden: false,
         submitPrefill: null,
         threadFocus: null,
+        threadCollapsed: {},
         linkNotice: null,
         mySubmissions: []
       };
@@ -3510,22 +3530,99 @@
       }
 
       // ---------- Mysteries ----------
+      // Every thread card collapses to its title: the toggle in the card
+      // head hides or shows the detail, and the choice is remembered in
+      // state.threadCollapsed for the rest of the session. A thread
+      // arrived at by deep link (state.threadFocus) always opens
+      // expanded. The quick nav under the page title lists every thread
+      // and jumps straight to it, expanding it first, and carries a
+      // submit button so a new mystery can be filed from the top of the
+      // page as well as from the button at the bottom.
+      function threadCardHtml(t, settled) {
+        var id = String(t.id);
+        var focused = state.threadFocus === id;
+        if (focused) delete state.threadCollapsed[id];
+        var collapsed = !!state.threadCollapsed[id];
+        var head = settled ? "h4" : "h3";
+        return '<article class="thread-card' + (settled ? " settled" : "") + (focused ? " thread-focus" : "") + '" id="thread-' + id + '">'
+          + '<div class="thread-head"><' + head + ">" + esc(t.title) + "</" + head + ">"
+          + '<button type="button" class="thread-toggle" data-thread-toggle="' + id + '" aria-expanded="' + (collapsed ? "false" : "true") + '" aria-controls="thread-body-' + id + '" aria-label="' + (collapsed ? "Expand" : "Collapse") + " this thread" + '"><span class="chev" aria-hidden="true"></span></button></div>'
+          + '<div class="thread-body" id="thread-body-' + id + '"' + (collapsed ? " hidden" : "") + ">"
+          + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
+          + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">' + (settled ? "Suggest a change" : "Add to this thread") + '</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/mysteries/thread-" + id, "Copy link") + "</div>"
+          + "</div></article>";
+      }
+      function setThreadCollapsed(id, collapsed) {
+        if (collapsed) state.threadCollapsed[id] = true; else delete state.threadCollapsed[id];
+        var body = document.getElementById("thread-body-" + id);
+        if (body) body.hidden = collapsed;
+        var card = document.getElementById("thread-" + id);
+        var btn = card ? card.querySelector("[data-thread-toggle]") : null;
+        if (btn) {
+          btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          btn.setAttribute("aria-label", (collapsed ? "Expand" : "Collapse") + " this thread");
+        }
+      }
+      function jumpToThread(id) {
+        setThreadCollapsed(id, false);
+        var card = document.getElementById("thread-" + id);
+        if (!card) return;
+        var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        card.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+        card.classList.add("thread-focus");
+        window.setTimeout(function () { card.classList.remove("thread-focus"); }, 2000);
+      }
+      function wireThreadControls(main) {
+        var toggles = main.querySelectorAll("[data-thread-toggle]");
+        for (var i = 0; i < toggles.length; i++) {
+          (function (btn) {
+            btn.addEventListener("click", function () {
+              var id = btn.getAttribute("data-thread-toggle");
+              setThreadCollapsed(id, !state.threadCollapsed[id]);
+            });
+          })(toggles[i]);
+        }
+        var jumps = main.querySelectorAll("[data-thread-jump]");
+        for (var j = 0; j < jumps.length; j++) {
+          (function (btn) {
+            btn.addEventListener("click", function () { jumpToThread(btn.getAttribute("data-thread-jump")); });
+          })(jumps[j]);
+        }
+        var all = main.querySelector("[data-threads-all]");
+        if (all) all.addEventListener("click", function () {
+          DATA.threads.forEach(function (t) { setThreadCollapsed(String(t.id), false); });
+        });
+        var none = main.querySelector("[data-threads-none]");
+        if (none) none.addEventListener("click", function () {
+          DATA.threads.forEach(function (t) { setThreadCollapsed(String(t.id), true); });
+        });
+      }
       function renderMysteries(main) {
         var open = DATA.threads.filter(function (t) { return t.status === "open"; });
         var done = DATA.threads.filter(function (t) { return t.status === "resolved"; });
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
-        open.forEach(function (t) {
-          html += '<article class="thread-card' + (state.threadFocus === String(t.id) ? " thread-focus" : "") + '" id="thread-' + t.id + '"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/mysteries/thread-" + t.id, "Copy link") + "</div></article>";
-        });
+        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml();
+        if (open.length + done.length > 0) {
+          html += '<nav class="thread-nav" aria-label="Jump to a thread">'
+            + '<div class="thread-nav-top"><p class="thread-nav-label">Jump to a thread</p>'
+            + '<span class="thread-nav-all"><button type="button" class="ghost-btn" data-threads-all>Expand all</button> <button type="button" class="ghost-btn" data-threads-none>Collapse all</button></span></div>'
+            + '<ul class="thread-nav-list">';
+          open.forEach(function (t) {
+            html += '<li><button type="button" class="thread-jump" data-thread-jump="' + t.id + '">' + esc(t.title) + "</button></li>";
+          });
+          done.forEach(function (t) {
+            html += '<li><button type="button" class="thread-jump" data-thread-jump="' + t.id + '">' + esc(t.title) + '</button> <span class="status-pill">Settled</span></li>';
+          });
+          html += "</ul>"
+            + '<div class="thread-nav-submit"><button type="button" class="btn btn-teal" data-suggest data-suggest-section="mysteries" data-suggest-key="" data-suggest-label="" data-suggest-type="addition">Submit a new mystery or thread</button></div>'
+            + "</nav>";
+        }
+        html += '<div class="stack" style="margin-top:1rem">';
+        open.forEach(function (t) { html += threadCardHtml(t, false); });
         html += "</div>";
         if (!threadsTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">Threads could not be loaded. Live sync is not connected. Try again.</p>';
         if (done.length > 0) {
           html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)" data-st="mysteries.settled">' + esc(stVal("mysteries.settled", "Settled")) + '</h3><div class="stack" style="margin-top:0.75rem">';
-          done.forEach(function (t) {
-            html += '<article class="thread-card settled' + (state.threadFocus === String(t.id) ? " thread-focus" : "") + '" id="thread-' + t.id + '"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/mysteries/thread-" + t.id, "Copy link") + "</div></article>";
-          });
+          done.forEach(function (t) { html += threadCardHtml(t, true); });
           html += "</div>";
         }
         html += '<div style="margin-top:1.5rem"><button type="button" class="btn btn-teal" data-suggest data-suggest-section="mysteries" data-suggest-key="" data-suggest-label="" data-suggest-type="addition">Submit a new mystery or thread</button></div></div>';
@@ -3534,6 +3631,7 @@
         wireSuggestButtons(main);
         wireWikiLinks(main);
         wireCopyLinks(main);
+        wireThreadControls(main);
         if (state.threadFocus) {
           var threadTarget = document.getElementById("thread-" + state.threadFocus);
           state.threadFocus = null;
