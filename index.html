@@ -3581,7 +3581,7 @@
             renderPreservingMapView();
           });
         } else if (mode === "location" || mode === "token") {
-          var mkRow = { map: state.mapKey, kind: mode, x: px, y: py, label: mode === "location" ? "New location" : "New token", note: "", icon_key: null, show_label: true, visibility: "player", hex_q: hq, hex_r: hr };
+          var mkRow = { map: state.mapKey, kind: "other", x: px, y: py, label: "New location", note: "", icon_key: null, show_label: true, visibility: "player", hex_q: hq, hex_r: hr };
           sb.from("map_markers").insert(mkRow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
             if (res.error || !res.data || !res.data[0]) { state.mapToolMode = null; loadLive(); return; }
             var nm = mapMarkerRow(res.data[0]);
@@ -3895,8 +3895,17 @@
             renderPreservingMapView();
           });
         } else {
-          var kind = mode === "location" || mode === "token" || mode === "party" ? mode : "other";
-          var label = kind === "location" ? "New location" : kind === "token" ? "New token" : kind === "party" ? "The Party" : "New marker";
+          // The map_markers table only accepts the kinds "party" and
+          // "other" (its map_markers_kind_check constraint rejects
+          // anything else). Every placement entry point — drag and drop,
+          // tap-to-arm, and the right-click icon list — arrives here with
+          // mode "token" (or "location"), and storing that mode verbatim
+          // as the kind made the database refuse the insert, so the
+          // dialog closed and nothing ever appeared on the map. A placed
+          // icon is stored as kind "other"; only the party marker keeps
+          // kind "party".
+          var kind = mode === "party" ? "party" : "other";
+          var label = kind === "party" ? "The Party" : "New location";
           if (labelText && kind !== "party") label = labelText;
           var mkRow = { map: state.mapKey, kind: kind, x: pos.x, y: pos.y, label: label, note: "", icon_key: iconKey || (kind === "party" ? "party-token" : null), show_label: true, visibility: vis, hex_q: pos.q, hex_r: pos.r };
           sb.from("map_markers").insert(mkRow).select("id,map,kind,x,y,label,note,icon_key,show_label,visibility,hex_q,hex_r").then(function (res) {
