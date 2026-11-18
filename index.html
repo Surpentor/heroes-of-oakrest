@@ -63,8 +63,74 @@
       .muted { color: var(--dim); }
       .small { font-size: 0.875rem; }
       .prose-body { overflow-wrap: break-word; }
-      .prose-body p { margin: 0 0 0.75rem; font-size: 15px; line-height: 1.65; }
+      .prose-body p { margin: 0 0 1rem; font-size: 16px; line-height: 1.75; }
       .prose-body p:last-child { margin-bottom: 0; }
+      .prose-body p.prose-lead { font-size: 1.125rem; line-height: 1.7; }
+      .prose-body p.prose-lead::first-letter {
+        font-family: var(--font-display); font-size: 3.1em; font-weight: 700; line-height: 0.82;
+        float: left; padding: 0.06em 0.14em 0 0; color: var(--gold);
+      }
+      .prose-h {
+        font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; color: var(--accent-deep);
+        margin: 1.75rem 0 0.625rem; padding-bottom: 0.375rem; border-bottom: 1px solid var(--border);
+        scroll-margin-top: 8rem;
+      }
+      .prose-h:first-child { margin-top: 0.25rem; }
+      .prose-list { margin: 0 0 1rem; padding-left: 1.375rem; font-size: 16px; line-height: 1.7; }
+      .prose-list li { margin: 0 0 0.375rem; }
+      .prose-list li::marker { color: var(--gold); }
+      .prose-quote {
+        margin: 1.25rem 0; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--gold);
+        font-size: 1.0625rem; line-height: 1.65; font-style: italic; color: var(--accent-deep);
+      }
+      .prose-break { display: flex; align-items: center; justify-content: center; margin: 1.5rem 0; }
+      .prose-break::before, .prose-break::after { content: ""; height: 1px; width: 4.5rem; background: var(--border); }
+      .prose-break span { width: 0.55rem; height: 0.55rem; margin: 0 0.75rem; transform: rotate(45deg); border: 2px solid var(--gold); opacity: 0.7; }
+      button.wiki-link {
+        display: inline; border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+        font: inherit; color: var(--teal); text-decoration: underline; text-decoration-style: dotted;
+        text-underline-offset: 3px; min-height: 0; text-align: left;
+      }
+      button.wiki-link:hover, button.wiki-link:focus-visible { color: var(--accent-deep); text-decoration-style: solid; }
+      button.wiki-link.is-person { color: var(--accent-deep); }
+      button.wiki-link.is-person:hover, button.wiki-link.is-person:focus-visible { color: var(--gold); }
+      button.wiki-link.is-hist, button.wiki-link.is-chron { color: var(--gold); }
+      button.wiki-link.is-hist:hover, button.wiki-link.is-hist:focus-visible,
+      button.wiki-link.is-chron:hover, button.wiki-link.is-chron:focus-visible { color: var(--accent-deep); }
+      .article-meta {
+        display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; margin-top: 0.625rem;
+        font-size: 0.8125rem; color: var(--dim);
+      }
+      .article-meta strong { color: var(--text); font-weight: 600; }
+      .article-toc {
+        margin: 1rem 0 1.25rem; border: 1px solid var(--border); border-radius: var(--radius);
+        background: var(--surface); padding: 0.875rem 1rem;
+      }
+      .article-toc p { margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+      .article-toc ul { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.25rem; }
+      .article-toc a { color: var(--teal); font-size: 0.9375rem; text-decoration: none; }
+      .article-toc a:hover, .article-toc a:focus-visible { text-decoration: underline; }
+      .related-box { margin-top: 2rem; border-top: 2px solid var(--gold); padding-top: 1rem; }
+      .related-box > h2 { font-family: var(--font-display); font-size: 1.375rem; font-weight: 600; color: var(--accent-deep); margin: 0; }
+      .related-group { margin-top: 1rem; }
+      .related-group > h3 { margin: 0 0 0.5rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+      .rel-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+      button.rel-chip {
+        display: inline-flex; align-items: baseline; gap: 0.45rem; border: 1px solid var(--border);
+        background: var(--surface); color: var(--text); border-radius: 999px; padding: 0.4rem 0.8rem;
+        font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; text-align: left;
+      }
+      button.rel-chip:hover, button.rel-chip:focus-visible { border-color: var(--gold); }
+      button.rel-chip .rel-kind { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); white-space: nowrap; }
+      button.rel-chip .rel-kind.person { color: var(--accent-deep); }
+      button.rel-chip .rel-kind.event { color: var(--gold); }
+      button.rel-chip .rel-kind.place { color: var(--teal); }
+      .wiki-cat-head {
+        font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; color: var(--accent-deep);
+        margin: 1.75rem 0 0; padding-bottom: 0.375rem; border-bottom: 2px solid var(--gold);
+      }
+      .wiki-cat-head .count { font-family: Georgia, serif; font-size: 0.875rem; font-weight: 400; color: var(--dim); }
+      ol.tl-list li.tl-item.tl-focus .tl-card { outline: 1px solid var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
       .chip {
         border: 1px solid var(--border); background: var(--surface); color: var(--dim);
         border-radius: 999px; padding: 0.375rem 0.75rem; font-size: 0.875rem; font-weight: 500;
@@ -562,14 +628,294 @@
           return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
         });
       }
-      function bodyHtml(text) {
-        var parts = String(text || "").split(/\n\s*\n/);
-        var out = '<div class="prose-body">';
-        for (var i = 0; i < parts.length; i++) {
-          var p = parts[i].trim();
-          if (p) out += "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>";
+      // ---------- Formatted prose with internal wiki links ----------
+      // Article and entry bodies are stored as plain prose: paragraphs
+      // separated by blank lines, with no headings, lists, or markup in
+      // the text itself. All structure and linking below is derived at
+      // render time, so the stored text never changes: short title-case
+      // lines become subheadings, line-per-item blocks become lists,
+      // quoted lines become pull quotes, long unbroken runs gain a
+      // divider, and the first mention of any other article, person,
+      // place (map pin), Timeline event, or Chronicle moment becomes a
+      // link to that entry on this site. Links are internal only.
+      function splitParas(text) {
+        return String(text || "").split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(function (p) { return p; });
+      }
+      var WIKI_STOP_LABELS = { "caldaryn": true, "the party": true, "the road": true, "the world": true };
+      function wikiTargets(exclude) {
+        exclude = exclude || {};
+        var byLabel = {}, targets = [];
+        function add(label, kind, key, hint, entry) {
+          label = String(label || "").trim();
+          if (label.length < 4) return;
+          var lk = label.toLowerCase();
+          if (WIKI_STOP_LABELS[lk] || byLabel[lk]) return;
+          byLabel[lk] = true;
+          targets.push({ label: label, labelLower: lk, kind: kind, key: key, hint: hint, entry: entry || null });
         }
-        return out + "</div>";
+        visibleLore().forEach(function (e) {
+          if (exclude.loreKey && e.key === exclude.loreKey) return;
+          add(e.title, "lore", e.key, "Article: " + e.title, e);
+          add(e.title.replace(/^The\s+/i, ""), "lore", e.key, "Article: " + e.title, e);
+          var epithet = e.title.split(/\s+the\s+/i)[0];
+          if (epithet !== e.title && epithet.length >= 4 && !/\b(of|in|on|at|by|for)$/i.test(epithet)) {
+            add(epithet, "lore", e.key, "Article: " + e.title, e);
+          }
+        });
+        visiblePeople().forEach(function (p) {
+          if (exclude.personKey && exclude.personKey === p.key) return;
+          add(p.name, "person", p.key, "Person: " + p.name, p);
+          var bare = p.name.replace(/^(Lord|Lady|Sir|Dame|King|Queen|Captain|Master|Mistress|Elder|Brother|Sister|Father|Mother|Saint|St\.)\s+/i, "");
+          if (bare !== p.name) add(bare, "person", p.key, "Person: " + p.name, p);
+        });
+        try {
+          visibleHistory().forEach(function (ev) {
+            if (exclude.histId && ev.id === exclude.histId) return;
+            add(ev.title, "hist", ev.id, "Timeline: " + ev.title, ev);
+            add(ev.title.replace(/^The\s+/i, ""), "hist", ev.id, "Timeline: " + ev.title, ev);
+          });
+        } catch (e) { /* history lives further down this script; ignore until defined */ }
+        visibleChronicle().forEach(function (c) {
+          if (exclude.chronKey && c.key === exclude.chronKey) return;
+          add(c.title, "chron", c.key, "Chronicle: " + c.title, c);
+        });
+        var exclLabels = {};
+        if (exclude.loreKey) {
+          visibleLore().forEach(function (e) {
+            if (e.key === exclude.loreKey) {
+              exclLabels[e.title.toLowerCase()] = true;
+              exclLabels[e.title.replace(/^The\s+/i, "").toLowerCase()] = true;
+            }
+          });
+        }
+        if (exclude.personKey) {
+          visiblePeople().forEach(function (p) { if (p.key === exclude.personKey) exclLabels[p.name.toLowerCase()] = true; });
+        }
+        visiblePins().forEach(function (pin) {
+          if (exclude.pinId && pin.id === exclude.pinId) return;
+          if (exclLabels[String(pin.label || "").toLowerCase()]) return;
+          add(pin.label, "pin", pin.id, "On the map: " + pin.label, pin);
+        });
+        targets.sort(function (a, b) { return b.label.length - a.label.length; });
+        return targets;
+      }
+      function linkifyText(text, targets, seen) {
+        var raw = String(text || "");
+        if (!raw) return "";
+        var lower = raw.toLowerCase();
+        var active = [];
+        for (var t = 0; t < targets.length; t++) if (lower.indexOf(targets[t].labelLower) !== -1) active.push(targets[t]);
+        if (active.length === 0) return esc(raw);
+        var out = "", i = 0, ch, before, after;
+        while (i < raw.length) {
+          var matched = null;
+          before = i === 0 ? "" : raw.charAt(i - 1);
+          if (i === 0 || !/[A-Za-z0-9']/.test(before)) {
+            for (var k = 0; k < active.length; k++) {
+              var lab = active[k].labelLower;
+              if (i + lab.length > raw.length) continue;
+              if (lower.substr(i, lab.length) !== lab) continue;
+              after = raw.charAt(i + lab.length);
+              if (after && /[A-Za-z0-9]/.test(after)) continue;
+              if (after === "'") {
+                var n1 = raw.charAt(i + lab.length + 1), n2 = raw.charAt(i + lab.length + 2);
+                var possessive = (n1 === "s" || n1 === "S") && !/[A-Za-z]/.test(n2);
+                if (/[A-Za-z]/.test(n1) && !possessive) continue;
+              }
+              matched = active[k];
+              break;
+            }
+          }
+          if (matched) {
+            var seg = raw.substr(i, matched.label.length);
+            var seenKey = matched.kind + ":" + matched.key;
+            if (!seen[seenKey]) {
+              seen[seenKey] = true;
+              out += '<button type="button" class="wiki-link is-' + matched.kind + '" data-wiki-' + matched.kind + '="' + esc(String(matched.key)) + '" title="' + esc(matched.hint) + '">' + esc(seg) + "</button>";
+            } else {
+              out += esc(seg);
+            }
+            i += matched.label.length;
+          } else {
+            ch = raw.charAt(i);
+            out += esc(ch);
+            i++;
+          }
+        }
+        return out;
+      }
+      function isHeadingPara(p) {
+        var t = p.trim();
+        if (t.indexOf("\n") !== -1 || t.length < 3 || t.length > 60) return false;
+        if (/[.!?]$/.test(t)) return false;
+        if (/[.!?;]/.test(t.replace(/:$/, ""))) return false;
+        var words = t.replace(/:$/, "").split(/\s+/);
+        if (words.length > 7) return false;
+        if (t === t.toUpperCase() && /[A-Z]/.test(t)) return true;
+        var cap = 0;
+        words.forEach(function (w) { if (/^[A-Z]/.test(w) || /^(of|the|and|in|on|a|an|to|at|by)$/i.test(w)) cap++; });
+        return cap >= Math.ceil(words.length * 0.7);
+      }
+      function listLinesOf(p) {
+        var lines = p.split("\n").map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+        if (lines.length < 2) return null;
+        var marked = 0;
+        lines.forEach(function (l) { if (/^[-•*·]\s+/.test(l) || /^\d+[.)]\s+/.test(l)) marked++; });
+        if (marked >= 2) return lines.map(function (l) { return l.replace(/^[-•*·]\s+/, "").replace(/^\d+[.)]\s+/, ""); });
+        var allShort = true;
+        lines.forEach(function (l) { if (l.length > 60) allShort = false; });
+        if (lines.length >= 3 && allShort) return lines;
+        return null;
+      }
+      function isMarkedLine(p) {
+        return p.indexOf("\n") === -1 && (/^[-•*·]\s+/.test(p) || /^\d+[.)]\s+/.test(p));
+      }
+      function stripMarker(p) {
+        return p.replace(/^[-•*·]\s+/, "").replace(/^\d+[.)]\s+/, "");
+      }
+      function isQuotePara(p) {
+        var t = p.trim();
+        if (p.indexOf("\n") !== -1 || t.length > 400) return false;
+        if (t.charAt(0) !== '"' && t.charAt(0) !== "“") return false;
+        return /["”]\s*$/.test(t);
+      }
+      function formattedBlocks(text, opts) {
+        opts = opts || {};
+        var paras = splitParas(text);
+        var targets = opts.linkify === false ? [] : wikiTargets(opts.exclude || {});
+        var seen = {};
+        var blocks = [];
+        var headingSeq = 0, proseRun = 0, leadDone = false;
+        var idx = 0;
+        while (idx < paras.length) {
+          var p = paras[idx];
+          if (isMarkedLine(p)) {
+            var runStart = idx, items = [];
+            while (idx < paras.length && isMarkedLine(paras[idx])) { items.push(stripMarker(paras[idx])); idx++; }
+            if (items.length >= 2) {
+              blocks.push({ type: "list", paraIndex: runStart, html: '<ul class="prose-list">' + items.map(function (l) { return "<li>" + linkifyText(l, targets, seen) + "</li>"; }).join("") + "</ul>" });
+              proseRun = 0;
+              continue;
+            }
+            idx = runStart;
+            p = paras[idx];
+          }
+          if (isHeadingPara(p)) {
+            headingSeq++;
+            var htext = p.replace(/:$/, "");
+            blocks.push({ type: "heading", paraIndex: idx, id: "sec-" + headingSeq, text: htext, html: '<h3 class="prose-h" id="sec-' + headingSeq + '">' + linkifyText(htext, targets, seen) + "</h3>" });
+            proseRun = 0;
+            idx++;
+            continue;
+          }
+          var lines = listLinesOf(p);
+          if (lines) {
+            var listHtml = "";
+            if (lines.length >= 3 && /:$/.test(lines[0])) {
+              listHtml += "<p>" + linkifyText(lines[0], targets, seen) + "</p>";
+              lines = lines.slice(1);
+            }
+            listHtml += '<ul class="prose-list">' + lines.map(function (l) { return "<li>" + linkifyText(l, targets, seen) + "</li>"; }).join("") + "</ul>";
+            blocks.push({ type: "list", paraIndex: idx, html: listHtml });
+            proseRun = 0;
+            idx++;
+            continue;
+          }
+          var flat = p.replace(/\s*\n\s*/g, " ");
+          if (isQuotePara(p)) {
+            blocks.push({ type: "quote", paraIndex: idx, html: '<blockquote class="prose-quote">' + linkifyText(flat, targets, seen) + "</blockquote>" });
+            proseRun = 0;
+            idx++;
+            continue;
+          }
+          var cls = leadDone ? "" : ' class="prose-lead"';
+          leadDone = true;
+          proseRun++;
+          blocks.push({ type: "p", paraIndex: idx, html: "<p" + cls + ">" + linkifyText(flat, targets, seen) + "</p>" });
+          if (proseRun === 5 && idx < paras.length - 1) {
+            blocks.push({ type: "break", paraIndex: idx, html: '<div class="prose-break" aria-hidden="true"><span></span></div>' });
+            proseRun = 0;
+          }
+          idx++;
+        }
+        return blocks;
+      }
+      function bodyHtml(text, opts) {
+        var blocks = formattedBlocks(text, opts);
+        return '<div class="prose-body">' + blocks.map(function (b) { return b.html; }).join("") + "</div>";
+      }
+      function scanMentions(text, exclude) {
+        var hay = String(text || "").toLowerCase();
+        var found = { lore: [], people: [], pins: [], hist: [], chron: [] };
+        var targets = wikiTargets(exclude || {});
+        var seen = {};
+        targets.forEach(function (t) {
+          var id = t.kind + ":" + t.key;
+          if (seen[id]) return;
+          if (hay.indexOf(t.labelLower) !== -1) {
+            seen[id] = true;
+            if (t.kind === "lore") found.lore.push(t);
+            else if (t.kind === "person") found.people.push(t);
+            else if (t.kind === "pin") found.pins.push(t);
+            else if (t.kind === "hist") found.hist.push(t);
+            else if (t.kind === "chron") found.chron.push(t);
+          }
+        });
+        return found;
+      }
+      function relChipHtml(t) {
+        var kindLabel = t.kind === "lore" ? (t.entry && t.entry.category === "Places" ? "Place" : "Article")
+          : t.kind === "person" ? "Person"
+          : t.kind === "pin" ? "On the map"
+          : "Event";
+        var kindCls = t.kind === "person" ? "person" : (t.kind === "hist" || t.kind === "chron") ? "event" : t.kind === "pin" ? "place" : "";
+        var label = t.kind === "lore" ? t.entry.title : t.kind === "person" ? t.entry.name : t.kind === "pin" ? t.entry.label : t.entry.title;
+        return '<button type="button" class="rel-chip" data-wiki-' + t.kind + '="' + esc(String(t.key)) + '"><span class="rel-kind ' + kindCls + '">' + kindLabel + "</span>" + esc(label) + "</button>";
+      }
+      function relGroupHtml(heading, chips) {
+        if (!chips.length) return "";
+        return '<div class="related-group"><h3>' + esc(heading) + '</h3><div class="rel-chips">' + chips.join("") + "</div></div>";
+      }
+      function targetFor(kind, key, entry, hint) {
+        var label = kind === "person" ? entry.name : kind === "pin" ? entry.label : entry.title;
+        return { label: label, labelLower: String(label || "").toLowerCase(), kind: kind, key: key, hint: hint || label, entry: entry };
+      }
+      function wireWikiLinks(root) {
+        if (!root) return;
+        function wire(attr, fn) {
+          var els = root.querySelectorAll("[" + attr + "]");
+          for (var i = 0; i < els.length; i++) (function (el) {
+            el.addEventListener("click", function () {
+              if (state.siteEditMode) return;
+              fn(el.getAttribute(attr));
+            });
+          })(els[i]);
+        }
+        wire("data-wiki-lore", function (key) {
+          var e = loreByKey(key);
+          if (e) { state.reader = { kind: "lore", entry: e }; state.view = "wiki"; render(); window.scrollTo(0, 0); }
+        });
+        wire("data-wiki-person", function (key) {
+          var p = visiblePersonByKey(key);
+          if (p) { state.reader = { kind: "person", person: p }; state.view = "people"; render(); window.scrollTo(0, 0); }
+        });
+        wire("data-wiki-pin", function (idStr) {
+          var pid = Number(idStr), pin = null;
+          for (var i = 0; i < DATA.pins.length; i++) if (DATA.pins[i].id === pid) pin = DATA.pins[i];
+          if (pin) {
+            state.view = "maps"; state.mapKey = pin.mapKey; state.mapStack = [];
+            state.selectedPinId = pid; state.focusPinId = pid; state.selectedMarkerId = null; state.reader = null;
+            render(); window.scrollTo(0, 0);
+          }
+        });
+        wire("data-wiki-hist", function (id) {
+          state.timelineFocus = id; state.view = "timeline"; state.reader = null;
+          render(); window.scrollTo(0, 0);
+        });
+        wire("data-wiki-chron", function (key) {
+          state.chronicleFocus = key; state.view = "chronicle"; state.reader = null;
+          render();
+        });
       }
       function firstPara(text) {
         var parts = String(text || "").split(/\n\s*\n/);
@@ -717,19 +1063,113 @@
         return '<figure style="' + wrap + '"><span class="frame-box" style="display:block;height:16rem"><img src="' + esc(f.imageUrl) + '" alt="' + esc(f.caption) + '" loading="lazy" decoding="async" style="object-fit:' + (f.fit === "contain" ? "contain" : "cover") + ";object-position:" + pos + ";" + tf + '"></span>'
           + (f.caption ? '<figcaption class="small muted" style="text-align:center;margin-top:0.375rem;font-style:italic">' + esc(f.caption) + "</figcaption>" : "") + "</figure>";
       }
+      function articleTocHtml(blocks) {
+        var heads = blocks.filter(function (b) { return b.type === "heading"; });
+        var paraCount = blocks.filter(function (b) { return b.type === "p" || b.type === "list" || b.type === "quote"; }).length;
+        if (heads.length < 2 && !(heads.length === 1 && paraCount >= 6)) return "";
+        var out = '<nav class="article-toc" aria-label="On this page"><p>On this page</p><ul>';
+        heads.forEach(function (h) { out += '<li><a href="#' + h.id + '">' + esc(h.text) + "</a></li>"; });
+        return out + "</ul></nav>";
+      }
       function articleBodyHtml(e) {
+        var blocks = formattedBlocks(e.body, { exclude: { loreKey: e.key } });
         var figs = FIGURES.filter(function (f) { return f.loreId === e.id; }).sort(function (a, b) { return a.sortOrder - b.sortOrder || a.id - b.id; });
-        if (figs.length === 0) return bodyHtml(e.body);
-        var parts = String(e.body || "").split(/\n\s*\n/).filter(function (p) { return p.trim(); });
-        var out = '<div class="prose-body">';
+        var toc = articleTocHtml(blocks);
+        if (figs.length === 0) {
+          return toc + '<div class="prose-body">' + blocks.map(function (b) { return b.html; }).join("") + "</div>";
+        }
+        var paraCount = splitParas(e.body).length;
+        var out = toc + '<div class="prose-body">';
         function figsAt(n) { figs.filter(function (f) { return f.paragraphIndex === n; }).forEach(function (f) { out += "</div>" + figureHtml(f) + '<div class="prose-body">'; }); }
         figsAt(0);
-        for (var i = 0; i < parts.length; i++) {
-          out += "<p>" + esc(parts[i].trim()).replace(/\n/g, "<br>") + "</p>";
-          figsAt(i + 1);
-        }
-        figs.filter(function (f) { return f.paragraphIndex > parts.length; }).forEach(function (f) { out += "</div>" + figureHtml(f) + '<div class="prose-body">'; });
+        var emitted = {};
+        blocks.forEach(function (b) {
+          out += b.html;
+          if (!emitted[b.paraIndex]) {
+            emitted[b.paraIndex] = true;
+            figsAt(b.paraIndex + 1);
+          }
+        });
+        figs.filter(function (f) { return f.paragraphIndex > paraCount; }).forEach(function (f) { out += "</div>" + figureHtml(f) + '<div class="prose-body">'; });
         return out + "</div>";
+      }
+      function relatedForLoreHtml(e) {
+        var mentioned = scanMentions(e.body, { loreKey: e.key });
+        var chipsMentioned = [];
+        mentioned.lore.slice(0, 6).forEach(function (t) { chipsMentioned.push(relChipHtml(t)); });
+        mentioned.people.slice(0, 5).forEach(function (t) { chipsMentioned.push(relChipHtml(t)); });
+        mentioned.hist.slice(0, 3).forEach(function (t) { chipsMentioned.push(relChipHtml(t)); });
+        mentioned.chron.slice(0, 3).forEach(function (t) { chipsMentioned.push(relChipHtml(t)); });
+        var pinChips = [];
+        var seenPin = {};
+        visiblePins().forEach(function (pin) {
+          var a = pinArticle(pin);
+          if (a && a.key === e.key && !seenPin[pin.id]) {
+            seenPin[pin.id] = true;
+            pinChips.push(relChipHtml(targetFor("pin", pin.id, pin, "On the map: " + pin.label)));
+          }
+        });
+        mentioned.pins.slice(0, 4).forEach(function (t) {
+          if (!seenPin[t.key]) { seenPin[t.key] = true; pinChips.push(relChipHtml(t)); }
+        });
+        var titleLow = e.title.toLowerCase();
+        var appearsChips = [];
+        visibleLore().forEach(function (l) {
+          if (l.key !== e.key && appearsChips.length < 4 && String(l.body || "").toLowerCase().indexOf(titleLow) !== -1) {
+            appearsChips.push(relChipHtml(targetFor("lore", l.key, l, "Article: " + l.title)));
+          }
+        });
+        visibleChronicle().forEach(function (c) {
+          if (appearsChips.length < 7 && (c.title + " " + c.body).toLowerCase().indexOf(titleLow) !== -1) {
+            appearsChips.push(relChipHtml(targetFor("chron", c.key, c, "Chronicle: " + c.title)));
+          }
+        });
+        try {
+          visibleHistory().forEach(function (ev) {
+            if (appearsChips.length < 9 && (ev.links.indexOf(e.key) !== -1 || (ev.title + " " + ev.description).toLowerCase().indexOf(titleLow) !== -1)) {
+              appearsChips.push(relChipHtml(targetFor("hist", ev.id, ev, "Timeline: " + ev.title)));
+            }
+          });
+        } catch (err) { /* history defined further down; skip until available */ }
+        var sameCatChips = [];
+        visibleLore().forEach(function (l) {
+          if (l.category === e.category && l.key !== e.key && sameCatChips.length < 4) {
+            sameCatChips.push(relChipHtml(targetFor("lore", l.key, l, "Article: " + l.title)));
+          }
+        });
+        var inner = relGroupHtml("Mentioned in this article", chipsMentioned)
+          + relGroupHtml("Find it on the map", pinChips.slice(0, 5))
+          + relGroupHtml("Where this comes up", appearsChips)
+          + (e.category ? relGroupHtml("More in " + e.category, sameCatChips) : "");
+        if (!inner) return "";
+        return '<section class="related-box" aria-label="Keep exploring"><h2>Keep exploring</h2>' + inner + "</section>";
+      }
+      function relatedForPersonHtml(p) {
+        var nameLow = p.name.toLowerCase();
+        var articleChips = [], momentChips = [];
+        visibleLore().forEach(function (l) {
+          if (articleChips.length < 6 && String(l.body || "").toLowerCase().indexOf(nameLow) !== -1) {
+            articleChips.push(relChipHtml(targetFor("lore", l.key, l, "Article: " + l.title)));
+          }
+        });
+        visibleChronicle().forEach(function (c) {
+          if (momentChips.length < 4 && (c.title + " " + c.body).toLowerCase().indexOf(nameLow) !== -1) {
+            momentChips.push(relChipHtml(targetFor("chron", c.key, c, "Chronicle: " + c.title)));
+          }
+        });
+        try {
+          visibleHistory().forEach(function (ev) {
+            var linked = false;
+            ev.links.forEach(function (k) { if (HISTORY_PERSON_KEYS[k] === p.name) linked = true; });
+            if (momentChips.length < 7 && (linked || (ev.title + " " + ev.description).toLowerCase().indexOf(nameLow) !== -1)) {
+              momentChips.push(relChipHtml(targetFor("hist", ev.id, ev, "Timeline: " + ev.title)));
+            }
+          });
+        } catch (err) { /* history defined further down; skip until available */ }
+        var inner = relGroupHtml("Articles that mention " + p.name, articleChips)
+          + relGroupHtml("Moments on the road and in history", momentChips);
+        if (!inner) return "";
+        return '<section class="related-box" aria-label="Keep exploring"><h2>Keep exploring</h2>' + inner + "</section>";
       }
       function figuresFor(loreId) { return FIGURES.filter(function (f) { return f.loreId === loreId; }); }
 
@@ -789,6 +1229,7 @@
         showLabels: true,
         selectedPinId: null,
         chronicleFocus: null,
+        timelineFocus: null,
         selectedMarkerId: null,
         focusPinId: null,
         gmError: "",
@@ -1513,14 +1954,18 @@
       function renderLoreReader(main, e) {
         var c = coverOf(e);
         var figs = figuresFor(e.id);
+        var wordCount = String(e.body || "").split(/\s+/).filter(function (w) { return w; }).length;
+        var readMin = Math.max(1, Math.round(wordCount / 200));
+        var relatedHtml = relatedForLoreHtml(e);
         var html = '<article style="margin-top:1.5rem">'
           + '<button type="button" class="backlink" id="backBtn">Back to the wiki</button>'
           + '<p class="reader-cat">' + esc(e.category) + "</p>"
           + '<h1 class="reader-title">' + esc(e.title) + "</h1>"
+          + '<p class="article-meta"><span><strong>' + wordCount + "</strong> words</span><span>About <strong>" + readMin + (readMin === 1 ? " minute" : " minutes") + '</strong> to read</span>' + (e.gmOnly ? '<span class="gm-badge">GM only</span>' : "") + "</p>"
           + '<hr class="rule">'
           + (c ? framedImgHtml(c, "reader-img", e.title) : "")
           + articleBodyHtml(e)
-          + (e.sourceUrl ? '<p style="margin-top:1rem"><a href="' + esc(e.sourceUrl) + '" target="_blank" rel="noreferrer" style="font-size:0.875rem;color:var(--teal)">WorldAnvil article</a></p>' : "")
+          + relatedHtml
           + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change to this article</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Submit a picture for this article</button></div>';
         if (gmIsUnlocked()) {
           if (canEditText()) html += contentTextSectionHtml("lore", e);
@@ -1535,6 +1980,7 @@
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
         wireSuggestButtons(main);
+        wireWikiLinks(main);
         if (gmIsUnlocked()) {
           wireContentTextSections(main);
           wireCoverControl(main, "lore", e);
@@ -1689,9 +2135,23 @@
         html += "</div>";
         if (!loreTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">The wiki could not be loaded. Live sync is not connected. Try again.</p>';
         else if (loreHits.length === 0) html += '<p style="margin-top:2rem;text-align:center" class="muted">Nothing in the wiki matches that, yet.</p>';
-        html += '<div class="grid2" style="margin-top:1.25rem">';
-        loreHits.forEach(function (e) { html += loreCard(e); });
-        html += "</div></div>";
+        if (state.wikiCat === "All" && !q && loreHits.length > 0) {
+          var grouped = {};
+          loreHits.forEach(function (e) { (grouped[e.category || "More"] = grouped[e.category || "More"] || []).push(e); });
+          var groupOrder = CATS.filter(function (cc) { return grouped[cc]; });
+          Object.keys(grouped).sort().forEach(function (k) { if (groupOrder.indexOf(k) === -1) groupOrder.push(k); });
+          groupOrder.forEach(function (cat) {
+            html += '<h3 class="wiki-cat-head">' + esc(cat) + ' <span class="count">(' + grouped[cat].length + (grouped[cat].length === 1 ? " article" : " articles") + ')</span></h3>'
+              + '<div class="grid2" style="margin-top:0.75rem">';
+            grouped[cat].forEach(function (e) { html += loreCard(e); });
+            html += "</div>";
+          });
+        } else if (loreHits.length > 0) {
+          html += '<div class="grid2" style="margin-top:1.25rem">';
+          loreHits.forEach(function (e) { html += loreCard(e); });
+          html += "</div>";
+        }
+        html += "</div>";
         main.innerHTML = html;
         var search = document.getElementById("wikiSearch");
         search.addEventListener("input", function () {
@@ -1963,7 +2423,14 @@
         entries.forEach(function (e) {
           var isGm = !!e.gmOnly;
           var focus = state.chronicleFocus && state.chronicleFocus === e.key;
-          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body) + textEditBtnHtml("chronicle", e.id)
+          var rel = scanMentions(e.title + " " + e.body, { chronKey: e.key });
+          var relChips = [];
+          rel.lore.slice(0, 3).forEach(function (t) { relChips.push(relChipHtml(t)); });
+          rel.people.slice(0, 3).forEach(function (t) { relChips.push(relChipHtml(t)); });
+          rel.hist.slice(0, 2).forEach(function (t) { relChips.push(relChipHtml(t)); });
+          rel.pins.slice(0, 2).forEach(function (t) { relChips.push(relChipHtml(t)); });
+          var relHtml = relChips.length ? '<div class="rel-chips" style="margin-top:0.625rem">' + relChips.join("") + "</div>" : "";
+          html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body, { exclude: { chronKey: e.key } }) + relHtml + textEditBtnHtml("chronicle", e.id)
             + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button></div>' + "</li>";
         });
         html += "</ol>"
@@ -1971,6 +2438,7 @@
         main.innerHTML = html;
         wireTextEditButtons(main);
         wireSuggestButtons(main);
+        wireWikiLinks(main);
         if (state.chronicleFocus) {
           var target = main.querySelector('[data-chron="' + state.chronicleFocus + '"]');
           state.chronicleFocus = null;
@@ -2121,10 +2589,10 @@
               altIdx++;
               if (item.kind === "history") {
                 var ev = item.ev;
-                html += '<li class="tl-item history' + alt + (ev.gmOnly ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
+                html += '<li class="tl-item history' + alt + (ev.gmOnly ? " gm" : "") + (state.timelineFocus === ev.id ? " tl-focus" : "") + '" id="tl-' + esc(ev.id) + '"><span class="tl-dot" aria-hidden="true"></span>'
                   + '<article class="tl-card"><p class="tl-date">' + esc(historyDateLabel(ev)) + (ev.gmOnly ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
                   + '<h3 data-st="history.' + ev.id + '.title">' + esc(stVal("history." + ev.id + ".title", ev.title)) + "</h3>"
-                  + '<p class="tl-desc" data-st="history.' + ev.id + '.desc">' + esc(stVal("history." + ev.id + ".desc", ev.description)) + "</p>"
+                  + '<p class="tl-desc" data-st="history.' + ev.id + '.desc">' + linkifyText(stVal("history." + ev.id + ".desc", ev.description), wikiTargets({ histId: ev.id }), {}) + "</p>"
                   + historyLinksHtml(ev)
                   + "</article></li>";
               } else {
@@ -2141,6 +2609,13 @@
                 });
                 rel.people.forEach(function (p) {
                   html += '<button type="button" class="tl-link" data-tl-person="' + esc(p.key) + '">' + esc(p.name) + "</button>";
+                });
+                var relExtra = scanMentions(e.title + " " + e.body, { chronKey: e.key });
+                relExtra.hist.slice(0, 2).forEach(function (t) {
+                  html += '<button type="button" class="tl-link" data-wiki-hist="' + esc(t.key) + '">Event: ' + esc(t.entry.title) + "</button>";
+                });
+                relExtra.pins.slice(0, 2).forEach(function (t) {
+                  html += '<button type="button" class="tl-link" data-wiki-pin="' + esc(String(t.key)) + '">On the map: ' + esc(t.entry.label) + "</button>";
                 });
                 html += "</div>" + textEditBtnHtml("chronicle", e.id) + "</article></li>";
               }
@@ -2168,6 +2643,12 @@
           var p = visiblePersonByKey(this.getAttribute("data-tl-person"));
           if (p) { state.reader = { kind: "person", person: p }; state.view = "people"; render(); window.scrollTo(0, 0); }
         });
+        wireWikiLinks(main);
+        if (state.timelineFocus) {
+          var tlTarget = document.getElementById("tl-" + state.timelineFocus);
+          state.timelineFocus = null;
+          if (tlTarget) tlTarget.scrollIntoView({ block: "center" });
+        }
         decorateSiteText(main);
       }
 
@@ -2183,7 +2664,8 @@
           + '<p class="small muted" style="margin:0">' + kindLabel + " \u00B7 " + esc(p.status) + "</p>"
           + (p.gmOnly ? '<p style="margin:0.5rem 0 0"><span class="gm-badge">GM only</span></p>' : "")
           + '<hr class="rule">'
-          + bodyHtml(p.description)
+          + bodyHtml(p.description, { exclude: { personKey: p.key } })
+          + relatedForPersonHtml(p)
           + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="update">Suggest a change to this entry</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="picture">Submit a portrait or picture</button></div>';
         if (gmIsUnlocked()) {
           if (canEditText()) html += contentTextSectionHtml("person", p);
@@ -2193,6 +2675,7 @@
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
         wireSuggestButtons(main);
+        wireWikiLinks(main);
         if (gmIsUnlocked()) { wireContentTextSections(main); wireCoverControl(main, "person", p); }
         decorateSiteText(main);
       }
@@ -2565,6 +3048,7 @@
         main.innerHTML = html;
         wireTextEditButtons(main);
         wireSuggestButtons(main);
+        wireWikiLinks(main);
         decorateSiteText(main);
       }
     </script>
@@ -3405,6 +3889,7 @@
         if (canEditText()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit text</button>';
         html += "</div></section>";
         container.innerHTML = html;
+        wireWikiLinks(container);
         document.getElementById("pinClose").addEventListener("click", function () {
           state.selectedPinId = null;
           if (stage) stage.refreshPins();
@@ -3451,6 +3936,7 @@
           + (canEditText() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit text</button>' : "")
           + "</div></section>";
         container.innerHTML = html;
+        wireWikiLinks(container);
         var oa = document.getElementById("markerOpenArticle");
         if (oa && article) oa.addEventListener("click", function () {
           state.reader = { kind: "lore", entry: article }; state.view = "wiki"; render(); window.scrollTo(0, 0);
