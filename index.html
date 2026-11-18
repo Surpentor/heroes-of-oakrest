@@ -331,15 +331,18 @@
       .map-pin.art { height: 2.75rem; width: 2.75rem; min-height: 2.75rem; background: #ece5cd; padding: 2px; }
       .map-pin.art img { height: 100%; width: 100%; object-fit: contain; display: block; }
       .map-pin .badge { position: absolute; bottom: -4px; right: -4px; display: flex; align-items: center; justify-content: center; height: 18px; min-width: 18px; border-radius: 999px; border: 1px solid #fff; background: var(--gold); padding: 0 2px; font-size: 10px; font-weight: 700; color: #fff; }
+      /* Map labels live in map space with their icon: centered directly
+         underneath it, and scaling with the map like its printed names
+         (the pin layer no longer counter-scales against the zoom). */
       .map-label {
-        position: absolute; left: calc(100% + 5px); top: 50%; transform: translateY(-50%);
-        max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        position: absolute; left: 50%; top: calc(100% + 4px); transform: translateX(-50%);
+        max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        text-align: center;
         border: 1px solid var(--border); border-radius: 999px;
         background: color-mix(in srgb, var(--surface) 92%, transparent);
         padding: 1px 7px; font-size: 11px; font-weight: 600; line-height: 1.35; color: var(--text);
         box-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none;
       }
-      .map-label.flip { left: auto; right: calc(100% + 5px); }
       .map-controls { position: absolute; left: 0.5rem; top: 0.5rem; z-index: 10; display: flex; flex-direction: column; gap: 0.5rem; }
       .ctrl-btn {
         display: flex; height: 2.75rem; width: 2.75rem; min-height: 2.75rem; align-items: center; justify-content: center;
@@ -4134,14 +4137,17 @@
           var bottom = el.getAttribute("data-anchor") === "bottom";
           var anch = bottom ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
           var sf = Number(el.getAttribute("data-size")) || 1;
-          // Scale around the anchor point itself. With the default centre
-          // origin, a bottom-anchored pin's tip landed (sf/scale - 1) *
-          // height / 2 below its stored position whenever the zoom was not
-          // exactly the pin's size factor, so the visible pin sat below
-          // the point a drag was moving and resizing grew it from its
-          // middle instead of its tip.
+          // Pins, markers, and their labels are part of the map layer:
+          // they sit inside the map's own scaled element and are NOT
+          // counter-scaled against the zoom, so they grow and shrink
+          // with the map image exactly like the names and icons printed
+          // on the map itself. Zooming out no longer leaves full-size
+          // pins floating over a shrunken map. sf is only the GM's
+          // per-item size factor, applied around the anchor point
+          // itself (the tip for bottom-anchored pins) so resizing never
+          // moves the point the item sits on.
           el.style.transformOrigin = bottom ? "50% 100%" : "50% 50%";
-          el.style.transform = anch + " scale(" + (sf / scale) + ")";
+          el.style.transform = anch + " scale(" + sf + ")";
         }
         function applyView(s, x, y) {
           var c = clampView(s, x, y);
@@ -4296,7 +4302,7 @@
                 + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + pDrop + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '"' + (pDrop ? ' style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms"' : "") + '>'
                 + '<img src="' + art + '" alt="" draggable="false">' + '<span class="badge">' + p.number + "</span>" + pBadges
                 + "</button>"
-                + (labelOn ? '<span class="map-label' + (p.x > 76 ? " flip" : "") + '">' + esc(p.label) + "</span>" : "")
+                + (labelOn ? '<span class="map-label">' + esc(p.label) + "</span>" : "")
                 + "</div>";
             } else {
               var pending = p.status === "pending";
@@ -4304,8 +4310,9 @@
                 + '<button type="button" class="map-pin diamond' + (isSel ? " selected" : "") + (pending ? " pending" : "") + pStateCls + pDrop + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pending ? " (awaiting GM approval)" : "") + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '"' + (pDrop ? ' style="animation-delay:' + (i * 130) + 'ms"' : "") + '>'
                 + '<span class="pin-top"><span class="pin-ring"></span><span class="pin-head"><span class="pin-num">' + p.number + "</span></span></span>"
                 + '<span class="pin-stem"></span>' + pBadges
-                + (labelOn ? '<span class="pin-tip">' + esc(p.label) + "</span>" : "")
-                + "</button></div>";
+                + "</button>"
+                + (labelOn ? '<span class="map-label">' + esc(p.label) + "</span>" : "")
+                + "</div>";
             }
           });
           var markers = opts.getMarkers ? opts.getMarkers() : [];
@@ -4326,7 +4333,7 @@
               + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + mDrop + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
               + (art ? '<img src="' + art + '" alt="" draggable="false">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
               + "</button>"
-              + (labelOn ? '<span class="map-label' + (m.x > 76 ? " flip" : "") + '">' + esc(m.label) + "</span>" : "")
+              + (labelOn ? '<span class="map-label">' + esc(m.label) + "</span>" : "")
               + "</div>";
           });
           var compass = opts.getCompass ? opts.getCompass() : null;
@@ -4616,7 +4623,7 @@
         html += '<button type="button" class="btn btn-outline" id="pinZoom">Zoom to pin</button>';
         html += '<button type="button" class="btn btn-outline" id="pinSuggest">Suggest a change</button>';
         html += copyLinkBtnHtml("#/map/" + encodeURIComponent(pin.mapKey) + "/pin/" + pin.id, "Copy link to this pin", "btn btn-outline");
-        if (canEditText()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit text</button>';
+        if (gmIsUnlocked()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit label</button>';
         html += "</div></section>";
         container.innerHTML = html;
         wireWikiLinks(container);
@@ -4666,7 +4673,7 @@
           + (linkMap ? '<button type="button" class="btn btn-deep" id="markerOpenMap">Open map: ' + esc(linkMap.title) + "</button>" : "")
           + '<button type="button" class="btn btn-outline" id="markerZoom">Zoom to marker</button>'
           + '<button type="button" class="btn btn-outline" id="markerSuggest">Suggest a change</button>'
-          + (canEditText() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit text</button>' : "")
+          + (gmIsUnlocked() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit label</button>' : "")
           + "</div></section>";
         container.innerHTML = html;
         wireWikiLinks(container);
@@ -4748,7 +4755,7 @@
       function mapToolsHtml() {
         var html = '<section aria-label="GM Map Tools" style="margin-top:2rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:1rem">'
           + '<h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">GM Map Tools</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Pins and markers start locked; unlock one to drag it, and dragging keeps your zoom. Right-click any item to edit its text, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it.</p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Pins and markers start locked; unlock one to drag it, and dragging keeps your zoom. Right-click any item to edit its label, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it.</p>'
           + (state.mapKey === "caldaryn" ? '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" id="toolSnap" aria-pressed="' + (state.snapHex !== false) + '">Snap to hexes: ' + (state.snapHex !== false ? "On" : "Off") + "</button></div>" : "")
           + '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Upload a new icon or token</strong></p>'
           + '<label class="gm-field"><span>Icon name</span><input type="text" id="iconName" class="search-input"></label>'
@@ -5011,29 +5018,39 @@
         var wrap = document.createElement("div");
         wrap.className = "map-dialog-backdrop";
         wrap.id = "mapDialog";
-        var title = kind === "pin" ? "Edit pin " + item.number + " text" : "Edit " + (item.kind === "party" ? "party marker" : item.kind) + " text";
+        var title = kind === "pin" ? "Edit pin " + item.number + " label" : "Edit " + (item.kind === "party" ? "party marker" : "marker") + " label";
+        var showLabel = item.showLabel !== false;
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
-          + '<label class="gm-field"><span>Name shown on the map</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
+          + '<label class="gm-field"><span>Label text</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
+          + '<p class="small muted" style="margin-top:0.375rem">The label sits centered underneath the icon on the map. It is also the name used in the pin list and the item panel.</p>'
+          + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" id="dlgShowLabel" aria-pressed="' + showLabel + '">' + (showLabel ? "Label shown on the map" : "Label hidden on the map") + "</button></div>"
           + '<label class="gm-field"><span>Note shown in its panel</span><textarea id="dlgNote" class="search-input" rows="5">' + esc(item.note || "") + "</textarea></label>"
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save text</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSave">Save label</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
         var input = document.getElementById("dlgLabel");
         input.focus(); input.select();
+        var showBtn = document.getElementById("dlgShowLabel");
+        showBtn.addEventListener("click", function () {
+          showLabel = !showLabel;
+          this.setAttribute("aria-pressed", String(showLabel));
+          this.textContent = showLabel ? "Label shown on the map" : "Label hidden on the map";
+        });
         document.getElementById("dlgCancel").addEventListener("click", function () { wrap.remove(); });
         wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) wrap.remove(); });
         document.getElementById("dlgSave").addEventListener("click", function () {
           var msg = document.getElementById("dlgMsg");
           if (!sb) { msg.textContent = "Live sync is not connected."; return; }
-          var patch = { label: input.value, note: document.getElementById("dlgNote").value };
+          var patch = { label: input.value, note: document.getElementById("dlgNote").value, show_label: showLabel };
           var table = kind === "pin" ? "map_pins" : "map_markers";
           sb.from(table).update(patch, { returning: "minimal" }).eq("id", id).then(function (res) {
-            if (res.error) { msg.textContent = "The text could not be saved."; return; }
+            if (res.error) { msg.textContent = "The label could not be saved."; return; }
             item.label = patch.label;
             item.note = patch.note;
+            item.showLabel = patch.show_label;
             wrap.remove();
-            setMapMsg("Saved.");
+            setMapMsg("Label saved.");
             renderPreservingMapView();
           });
         });
@@ -5110,7 +5127,7 @@
             var np = mapPinRow(res.data[0]);
             DATA.pins.push(np);
             state.selectedPinId = np.id; state.selectedMarkerId = null;
-            setMapMsg("Pin " + np.number + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
+            setMapMsg("Pin " + np.number + " added" + (startHidden ? ", hidden from players" : "") + ". Edit its label any time from its right-click menu, or by selecting it and choosing Edit label.");
             renderPreservingMapView();
           });
         } else {
@@ -5132,7 +5149,7 @@
             var nm = mapMarkerRow(res.data[0]);
             MARKERS.push(nm);
             state.selectedMarkerId = nm.id; state.selectedPinId = null;
-            setMapMsg(label + " added" + (startHidden ? ", hidden from players" : "") + ". Rename it from its right-click menu or the editor below.");
+            setMapMsg(label + " added" + (startHidden ? ", hidden from players" : "") + ". Edit its label any time from its right-click menu, or by selecting it and choosing Edit label.");
             renderPreservingMapView();
           });
         }
@@ -5149,7 +5166,7 @@
         if (gmIsUnlocked()) {
           var locked = isLocked(kind, id);
           var hidden = item.visibility === "gm";
-          items.push({ label: "Edit text\u2026", action: function () { openRenameDialog(kind, id); } });
+          items.push({ label: "Edit label\u2026", action: function () { openRenameDialog(kind, id); } });
           items.push({ label: "Change icon\u2026", iconKey: item.iconKey || null, glyph: item.iconKey ? null : "\u25C6", action: function () { openIconPickerDialog(kind, id); } });
           items.push({ label: locked ? "Unlock (allow dragging)" : "Lock (stop dragging)", action: function () { toggleItemLock(kind, id); } });
           items.push({ label: hidden ? "Reveal to players" : "Hide from players", action: function () { toggleItemHidden(kind, id); } });
@@ -5176,7 +5193,7 @@
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(heading) + '">'
           + "<h3>" + esc(heading) + "</h3>"
           + previewHtml
-          + '<label class="gm-field"><span>Label</span><input type="text" id="dlgLabelOnly" class="search-input" placeholder="Name shown on the map"></label>'
+          + '<label class="gm-field"><span>Label text</span><input type="text" id="dlgLabelOnly" class="search-input" placeholder="Shown centered underneath the icon"></label>'
           + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgPlace">Place it</button><button type="button" class="btn btn-outline" id="dlgCancel">Cancel</button></div></div>';
         document.body.appendChild(wrap);
         var input = document.getElementById("dlgLabelOnly");
@@ -5425,7 +5442,7 @@
           + copyLinkBtnHtml("#/map/" + encodeURIComponent(state.mapKey), "Copy link to this map")
           + "</div>";
         if (gmIsUnlocked()) {
-          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Pins, markers, and their labels are part of the map layer, so they grow and shrink with the map as you zoom, and each label sits centered underneath its icon. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to edit its label, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it; a selected item also has an Edit label button in its panel. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
             + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>"
             + iconLibraryHtml();
         }
