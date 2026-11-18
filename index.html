@@ -363,6 +363,7 @@
       .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; font-size: 0.875rem; margin-top: 0.75rem; }
       .crumbs button { border: 0; background: none; cursor: pointer; font: inherit; font-weight: 500; color: var(--teal); text-decoration: underline; padding: 0; min-height: 2rem; }
       .crumbs .back { margin-left: 0.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; padding: 0.25rem 0.75rem; font-size: 0.75rem; min-height: 2rem; }
+      .crumbs .nav-back { margin-left: 0; margin-right: 0.375rem; background: var(--accent-deep); border-color: var(--accent-deep); color: var(--bg); font-weight: 700; max-width: min(70vw, 22rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .crumbs .crumb-current { font-weight: 600; color: var(--text); }
       nav.site-crumbs { margin-top: 0.875rem; }
 
@@ -1368,6 +1369,138 @@
         mySubmissions: []
       };
 
+      // ---------- Back navigation ----------
+      // Every link on the site (in-text wiki links, cards, related chips,
+      // timeline and chronicle links, pin panels, breadcrumbs, the top
+      // nav) navigates by mutating state and calling render(). So the
+      // history lives in render(): whenever the location it is about to
+      // draw differs from the last one drawn, the previous location is
+      // pushed onto NAV_STACK as a snapshot that applyNavSnapshot can
+      // restore exactly, scroll position included. The breadcrumb bar
+      // and the reader pages offer a "Back to <where you were>" button,
+      // and each push also adds a browser history entry so the device
+      // back button walks the same stack.
+      var NAV_STACK = [];
+      var lastNavSnap = null;
+      var lastScrollY = 0;
+      var restoringNav = false;
+      var navHistOk = false;
+      var navHistDepth = 0;
+      var suppressPop = false;
+      window.addEventListener("scroll", function () { lastScrollY = window.scrollY || 0; }, { passive: true });
+      try { history.replaceState({ hooNav: 0 }, ""); navHistOk = true; } catch (e) { /* history unavailable; in-page Back still works */ }
+      function navSnapshot() {
+        var snap = {
+          view: state.view,
+          readerKind: null, readerKey: null,
+          mapKey: state.mapKey,
+          selectedPinId: state.selectedPinId, selectedMarkerId: state.selectedMarkerId,
+          focusPinId: state.focusPinId,
+          wikiCat: state.wikiCat,
+          chronicleFocus: state.chronicleFocus, timelineFocus: state.timelineFocus,
+          submitPrefill: state.submitPrefill ? { section: state.submitPrefill.section || "", key: state.submitPrefill.key || "", label: state.submitPrefill.label || "", type: state.submitPrefill.type || "" } : null,
+          scroll: 0, label: ""
+        };
+        if (state.reader && state.reader.kind === "lore" && state.reader.entry) { snap.readerKind = "lore"; snap.readerKey = state.reader.entry.key; }
+        else if (state.reader && state.reader.kind === "person" && state.reader.person) { snap.readerKind = "person"; snap.readerKey = state.reader.person.key; }
+        snap.label = navSnapLabel(snap);
+        return snap;
+      }
+      function navSnapLabel(snap) {
+        if (snap.readerKind === "lore") { var e = loreByKey(snap.readerKey); return e ? e.title : "Article"; }
+        if (snap.readerKind === "person") { var p = visiblePersonByKey(snap.readerKey); return p ? p.name : "Person"; }
+        if (snap.view === "maps") { var m = MAPS[snap.mapKey]; return m ? m.title : "Maps"; }
+        if (snap.view === "submit" && snap.submitPrefill && snap.submitPrefill.label) return snap.submitPrefill.label;
+        for (var i = 0; i < NAV.length; i++) if (NAV[i].key === snap.view) return NAV[i].label;
+        if (snap.view === "gm") return "GM";
+        if (snap.view === "gmsignin") return "GM Sign In";
+        return snap.view;
+      }
+      function navLocKey(snap) {
+        return [snap.view, snap.readerKind || "", snap.readerKey || "",
+          snap.view === "maps" ? snap.mapKey : "", snap.view === "maps" ? (snap.selectedPinId || "") : "",
+          snap.wikiCat || "",
+          snap.submitPrefill ? (snap.submitPrefill.key || "") + "\u00B7" + (snap.submitPrefill.label || "") : ""].join("|");
+      }
+      function trackNavLocation() {
+        var snap = navSnapshot();
+        if (restoringNav) { lastNavSnap = snap; return; }
+        if (!lastNavSnap) { lastNavSnap = snap; return; }
+        if (navLocKey(lastNavSnap) === navLocKey(snap)) return;
+        var prev = lastNavSnap;
+        prev.scroll = lastScrollY;
+        NAV_STACK.push(prev);
+        if (NAV_STACK.length > 50) NAV_STACK.shift();
+        lastNavSnap = snap;
+        if (navHistOk) { try { history.pushState({ hooNav: NAV_STACK.length }, ""); navHistDepth = NAV_STACK.length; } catch (e) { navHistOk = false; } }
+      }
+      function navBackLabel() {
+        if (!NAV_STACK.length) return null;
+        var label = NAV_STACK[NAV_STACK.length - 1].label || "previous page";
+        if (label.length > 36) label = label.slice(0, 35).trim() + "\u2026";
+        return "\u2190 Back to " + label;
+      }
+      function applyNavSnapshot(snap) {
+        restoringNav = true;
+        state.view = snap.view;
+        state.reader = null;
+        if (snap.readerKind === "lore") {
+          var e = loreByKey(snap.readerKey);
+          if (e) { state.reader = { kind: "lore", entry: e }; state.view = "wiki"; }
+        } else if (snap.readerKind === "person") {
+          var p = visiblePersonByKey(snap.readerKey);
+          if (p) { state.reader = { kind: "person", person: p }; state.view = "people"; }
+        }
+        if (snap.wikiCat) state.wikiCat = snap.wikiCat;
+        if (snap.view === "maps") {
+          state.mapKey = snap.mapKey;
+          state.selectedPinId = snap.selectedPinId;
+          state.selectedMarkerId = snap.selectedMarkerId;
+          state.focusPinId = snap.focusPinId;
+          // Rebuild the map's own Back chain from its ancestors, so the
+          // in-map Back button still agrees with where we landed.
+          var chain = [], k = snap.mapKey, seen = {};
+          while (k && MAPS[k] && MAPS[k].parentKey && !seen[k]) { seen[k] = true; k = MAPS[k].parentKey; chain.unshift(k); }
+          state.mapStack = chain;
+        }
+        state.chronicleFocus = snap.chronicleFocus || null;
+        state.timelineFocus = snap.timelineFocus || null;
+        state.submitPrefill = snap.submitPrefill || null;
+        state.submitDone = null;
+        render();
+        restoringNav = false;
+        lastNavSnap = navSnapshot();
+        // A snapshot carrying a focus target scrolls to that target
+        // during render; anything else returns to where the reader was.
+        if (!snap.chronicleFocus && !snap.timelineFocus && !snap.focusPinId) window.scrollTo(0, snap.scroll || 0);
+      }
+      function navGoBack() {
+        if (!NAV_STACK.length) return false;
+        var snap = NAV_STACK.pop();
+        applyNavSnapshot(snap);
+        // Keep the browser history in step, so a later device-back press
+        // continues down the same stack instead of replaying this step.
+        if (navHistOk) {
+          navHistDepth = NAV_STACK.length;
+          suppressPop = true;
+          try { history.back(); } catch (e) { suppressPop = false; }
+          setTimeout(function () { suppressPop = false; }, 350);
+        }
+        return true;
+      }
+      window.addEventListener("popstate", function (ev) {
+        if (suppressPop) { suppressPop = false; return; }
+        // The Forward button fires popstate too: only a step to a lower
+        // depth than we are tracking is a Back step. A forward step just
+        // re-syncs the depth and leaves the page as it is.
+        var depth = ev.state && typeof ev.state.hooNav === "number" ? ev.state.hooNav : null;
+        if (depth !== null) {
+          if (depth >= navHistDepth) { navHistDepth = depth; return; }
+          navHistDepth = depth;
+        }
+        if (NAV_STACK.length) applyNavSnapshot(NAV_STACK.pop());
+      });
+
       // ---------- GM gate (server-side, through the get_gm_content RPC) ----------
       var GM_SESSION_KEY = "hoo2.gm.session";
       var gmPayload = null;
@@ -1637,12 +1770,16 @@
         if (!bar) return;
         var items = crumbTrail();
         var html = "";
+        var backLabel = navBackLabel();
+        if (backLabel) html += '<button type="button" class="back nav-back" id="navBackBtn" title="Return to the page that brought you here">' + esc(backLabel) + "</button>";
         items.forEach(function (it, i) {
           if (i > 0) html += '<span aria-hidden="true" class="muted">\u203A</span>';
           if (it.act) html += '<button type="button" data-crumb-act="' + it.act + '" data-crumb-key="' + esc(it.key || "") + '">' + esc(it.label) + "</button>";
           else html += '<span class="crumb-current" aria-current="page">' + esc(it.label) + "</span>";
         });
         bar.innerHTML = html;
+        var navBackBtn = bar.querySelector("#navBackBtn");
+        if (navBackBtn) navBackBtn.addEventListener("click", function () { navGoBack(); });
         var btns = bar.querySelectorAll("[data-crumb-act]");
         for (var i = 0; i < btns.length; i++) btns[i].addEventListener("click", function () {
           var act = this.getAttribute("data-crumb-act"), key = this.getAttribute("data-crumb-key");
@@ -1667,6 +1804,7 @@
         if (t) t.textContent = siteText("header.title");
       }
       function render() {
+        trackNavLocation();
         state.sizePreview = {};
         if (state.view !== "maps") state.keepMapView = false;
         renderHeaderText();
@@ -2077,7 +2215,7 @@
         var readMin = Math.max(1, Math.round(wordCount / 200));
         var relatedHtml = relatedForLoreHtml(e);
         var html = '<article style="margin-top:1.5rem">'
-          + '<button type="button" class="backlink" id="backBtn">Back to the wiki</button>'
+          + '<button type="button" class="backlink" id="backBtn">' + esc(navBackLabel() || "Back to the wiki") + "</button>"
           + '<p class="reader-cat">' + esc(e.category) + "</p>"
           + '<h1 class="reader-title">' + esc(e.title) + "</h1>"
           + '<p class="article-meta"><span><strong>' + wordCount + "</strong> words</span><span>About <strong>" + readMin + (readMin === 1 ? " minute" : " minutes") + '</strong> to read</span>' + (e.gmOnly ? '<span class="gm-badge">GM only</span>' : "") + "</p>"
@@ -2097,7 +2235,7 @@
         }
         html += "</article>";
         main.innerHTML = html;
-        document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
+        document.getElementById("backBtn").addEventListener("click", function () { if (!navGoBack()) { state.reader = null; render(); } });
         wireSuggestButtons(main);
         wireArtSuggest(main);
         wireWikiLinks(main);
@@ -2777,7 +2915,7 @@
         var c = coverOf(p);
         var kindLabel = p.kind === "pc" ? "Hero of Oakrest" : p.kind === "companion" ? "Companion of the road" : "Person of Caldaryn";
         var html = '<article style="margin-top:1.5rem">'
-          + '<button type="button" class="backlink" id="backBtn">Back to people</button>'
+          + '<button type="button" class="backlink" id="backBtn">' + esc(navBackLabel() || "Back to people") + "</button>"
           + (c ? framedImgHtml(c, "reader-img portrait", "Portrait of " + p.name) : "")
           + '<h1 class="reader-title" style="margin-top:0.75rem">' + esc(p.name) + "</h1>"
           + '<p style="margin:0.25rem 0 0;font-weight:500;color:var(--gold)">' + esc(p.role) + "</p>"
@@ -2794,7 +2932,7 @@
         }
         html += "</article>";
         main.innerHTML = html;
-        document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
+        document.getElementById("backBtn").addEventListener("click", function () { if (!navGoBack()) { state.reader = null; render(); } });
         wireSuggestButtons(main);
         wireArtSuggest(main);
         wireWikiLinks(main);
