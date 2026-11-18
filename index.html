@@ -86,6 +86,12 @@
       .prose-break { display: flex; align-items: center; justify-content: center; margin: 1.5rem 0; }
       .prose-break::before, .prose-break::after { content: ""; height: 1px; width: 4.5rem; background: var(--border); }
       .prose-break span { width: 0.55rem; height: 0.55rem; margin: 0 0.75rem; transform: rotate(45deg); border: 2px solid var(--gold); opacity: 0.7; }
+      /* No-art placeholder tag on cards, and the in-page art suggestion panel */
+      .no-art-tag { position: absolute; bottom: 0.55rem; left: 50%; transform: translateX(-50%); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+      .art-suggest { margin: 1rem 0 1.25rem; border: 1.5px dashed var(--gold); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
+      .art-suggest-kicker { margin: 0; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+      .art-suggest h2 { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; color: var(--accent-deep); margin: 0.2rem 0 0; }
+      .art-suggest .art-done { border: 1px solid var(--teal); border-radius: var(--radius); padding: 0.75rem; }
       button.wiki-link {
         display: inline; border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
         font: inherit; color: var(--teal); text-decoration: underline; text-decoration-style: dotted;
@@ -641,6 +647,43 @@
       function splitParas(text) {
         return String(text || "").split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(function (p) { return p; });
       }
+      // Most stored bodies are single unbroken blocks: no blank lines, no
+      // headings, sometimes no newlines at all (a whole person entry can
+      // be one 20-sentence paragraph). Splitting on blank lines alone
+      // left those as walls of text, so paragraphs are also rebuilt from
+      // sentences: a sentence splitter that respects abbreviations,
+      // initials, decimals, and quoted speech (a quote is never split
+      // mid-utterance), then a chunker that groups sentences into
+      // readable paragraphs and stands quoted utterances on their own.
+      var SENT_ABBR = { "st": 1, "mr": 1, "mrs": 1, "ms": 1, "dr": 1, "sr": 1, "jr": 1, "vs": 1, "etc": 1, "e.g": 1, "i.e": 1, "c": 1, "ca": 1, "no": 1, "vol": 1, "fig": 1, "capt": 1, "sgt": 1 };
+      function splitSentences(text) {
+        var s = String(text || "").replace(/\s+/g, " ").trim();
+        if (!s) return [];
+        var out = [], start = 0, i = 0, inQ = false;
+        while (i < s.length) {
+          var ch = s.charAt(i);
+          if (ch === '"') inQ = !inQ;
+          if (!inQ && (ch === "." || ch === "!" || ch === "?")) {
+            var j = i + 1;
+            while (j < s.length && /["\u201D\u2019)]/.test(s.charAt(j))) j++;
+            if (j >= s.length || /\s/.test(s.charAt(j))) {
+              var k = j;
+              while (k < s.length && /\s/.test(s.charAt(k))) k++;
+              var after = s.charAt(k);
+              var wm = s.slice(Math.max(start, i - 14), i).match(/([A-Za-z][A-Za-z.]*)$/);
+              var abbr = wm && SENT_ABBR[wm[1].toLowerCase().replace(/\.$/, "")];
+              var initial = wm && /^[A-Z]$/.test(wm[1]);
+              if (k >= s.length || (/[A-Z"\u201C'(]/.test(after) && !abbr && !initial)) {
+                out.push(s.slice(start, j).trim());
+                start = k; i = k; continue;
+              }
+            }
+          }
+          i++;
+        }
+        if (start < s.length) out.push(s.slice(start).trim());
+        return out.filter(function (x) { return x; });
+      }
       var WIKI_STOP_LABELS = { "caldaryn": true, "the party": true, "the road": true, "the world": true };
       function wikiTargets(exclude) {
         exclude = exclude || {};
@@ -657,22 +700,58 @@
           if (exclude.loreKey && e.key === exclude.loreKey) return;
           add(e.title, "lore", e.key, "Article: " + e.title, e);
           add(e.title.replace(/^The\s+/i, ""), "lore", e.key, "Article: " + e.title, e);
+          // Prose rarely uses a title's full formal shape: it drops the
+          // parenthetical ("The Barrow's Lid (Solren)" is just the
+          // Barrow's Lid in a sentence) and the part after a comma
+          // ("Neriath, Demigod of the Sea" is just Neriath). Register
+          // those shapes too, or most mentions never link.
+          var noParen = e.title.replace(/\s*\([^)]*\)\s*$/, "").trim();
+          if (noParen !== e.title) {
+            add(noParen, "lore", e.key, "Article: " + e.title, e);
+            add(noParen.replace(/^The\s+/i, ""), "lore", e.key, "Article: " + e.title, e);
+          }
+          var beforeComma = e.title.split(",")[0].replace(/\s*\([^)]*\)\s*$/, "").trim();
+          if (beforeComma !== e.title && beforeComma.length >= 4) {
+            add(beforeComma, "lore", e.key, "Article: " + e.title, e);
+            add(beforeComma.replace(/^The\s+/i, ""), "lore", e.key, "Article: " + e.title, e);
+          }
           var epithet = e.title.split(/\s+the\s+/i)[0];
           if (epithet !== e.title && epithet.length >= 4 && !/\b(of|in|on|at|by|for)$/i.test(epithet)) {
             add(epithet, "lore", e.key, "Article: " + e.title, e);
           }
         });
+        var NAME_TITLES = { "lord": 1, "lady": 1, "sir": 1, "dame": 1, "king": 1, "queen": 1, "captain": 1, "master": 1, "mistress": 1, "elder": 1, "brother": 1, "sister": 1, "father": 1, "mother": 1, "saint": 1, "st": 1, "old": 1, "the": 1 };
         visiblePeople().forEach(function (p) {
           if (exclude.personKey && exclude.personKey === p.key) return;
           add(p.name, "person", p.key, "Person: " + p.name, p);
           var bare = p.name.replace(/^(Lord|Lady|Sir|Dame|King|Queen|Captain|Master|Mistress|Elder|Brother|Sister|Father|Mother|Saint|St\.)\s+/i, "");
           if (bare !== p.name) add(bare, "person", p.key, "Person: " + p.name, p);
+          // Prose uses the everyday shapes of a name: without the quoted
+          // nickname and the trailing epithet (Budias Hobb-Took, Parnassus
+          // Foy), the nickname itself (Buddy), and the first name alone
+          // (Zuric, Ivy, Anya). Register all three or most mentions of
+          // the heroes never link. First names are added in name order,
+          // so an exact-name person (Garron, Elias) claims the shared
+          // first name before a longer namesake (Garron Pike) can.
+          var clean = p.name.replace(/"[^"]*"/g, "").replace(/\s*,.*$/, "").replace(/\s+/g, " ").trim();
+          if (clean && clean !== p.name) {
+            add(clean, "person", p.key, "Person: " + p.name, p);
+            var cleanBare = clean.replace(/^(Lord|Lady|Sir|Dame|King|Queen|Captain|Master|Mistress|Elder|Brother|Sister|Father|Mother|Saint|St\.)\s+/i, "");
+            if (cleanBare !== clean) add(cleanBare, "person", p.key, "Person: " + p.name, p);
+          }
+          var nick = p.name.match(/"([^"]+)"/);
+          if (nick && nick[1].length >= 3) add(nick[1], "person", p.key, "Person: " + p.name, p);
+          var firstTok = (clean || p.name).split(/\s+/)[0].replace(/,$/, "");
+          if (firstTok && firstTok.length >= 4 && !NAME_TITLES[firstTok.toLowerCase()] && (clean || p.name).indexOf(" ") !== -1) {
+            add(firstTok, "person", p.key, "Person: " + p.name, p);
+          }
         });
         try {
           visibleHistory().forEach(function (ev) {
             if (exclude.histId && ev.id === exclude.histId) return;
             add(ev.title, "hist", ev.id, "Timeline: " + ev.title, ev);
             add(ev.title.replace(/^The\s+/i, ""), "hist", ev.id, "Timeline: " + ev.title, ev);
+            add(ev.title.replace(/\s*\([^)]*\)\s*$/, "").replace(/^The\s+/i, ""), "hist", ev.id, "Timeline: " + ev.title, ev);
           });
         } catch (e) { /* history lives further down this script; ignore until defined */ }
         visibleChronicle().forEach(function (c) {
@@ -695,6 +774,7 @@
           if (exclude.pinId && pin.id === exclude.pinId) return;
           if (exclLabels[String(pin.label || "").toLowerCase()]) return;
           add(pin.label, "pin", pin.id, "On the map: " + pin.label, pin);
+          add(String(pin.label || "").replace(/^The\s+/i, ""), "pin", pin.id, "On the map: " + pin.label, pin);
         });
         targets.sort(function (a, b) { return b.label.length - a.label.length; });
         return targets;
@@ -779,31 +859,73 @@
         if (t.charAt(0) !== '"' && t.charAt(0) !== "“") return false;
         return /["”]\s*$/.test(t);
       }
+      // Expands stored paragraphs into display paragraphs, keeping the
+      // original paragraph index on every chunk so article figures still
+      // land after the stored paragraph they follow. Single newlines that
+      // separate paragraph-like lines become breaks; long unbroken runs
+      // are chunked by sentence (first chunk two sentences, then three),
+      // and a sentence carrying a spoken quote stands as its own
+      // paragraph so the eye gets the same rest a blank line would give.
+      function expandParas(paras) {
+        var out = [];
+        paras.forEach(function (p, pi) {
+          var subs = [p];
+          if (p.indexOf("\n") !== -1) {
+            var lines = p.split("\n").map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+            var paraLike = 0;
+            lines.forEach(function (l) { if (l.length >= 40 || /[.!?:;"\u201D]$/.test(l)) paraLike++; });
+            if (lines.length >= 2 && paraLike >= Math.ceil(lines.length * 0.6)) subs = lines;
+          }
+          subs.forEach(function (sub) {
+            if (isHeadingPara(sub) || isQuotePara(sub) || listLinesOf(sub) || isMarkedLine(sub)) {
+              out.push({ text: sub, paraIndex: pi });
+              return;
+            }
+            var flat = sub.replace(/\s*\n\s*/g, " ");
+            var sents = splitSentences(flat);
+            if (sents.length === 1 && flat.length > 600) sents = flat.split(/(?<=[.!?])\s+/).filter(function (x) { return x.trim(); });
+            if (sents.length < 4 || flat.length <= 380) { out.push({ text: flat, paraIndex: pi }); return; }
+            var buf = [], bufLimit = 2;
+            function flush() {
+              if (buf.length) { out.push({ text: buf.join(" "), paraIndex: pi }); buf = []; bufLimit = 3; }
+            }
+            sents.forEach(function (sent) {
+              if (sent.indexOf('"') !== -1 && sent.length >= 60) { flush(); out.push({ text: sent, paraIndex: pi }); return; }
+              buf.push(sent);
+              if (buf.length >= bufLimit || buf.join(" ").length > 420) flush();
+            });
+            flush();
+          });
+        });
+        return out;
+      }
       function formattedBlocks(text, opts) {
         opts = opts || {};
-        var paras = splitParas(text);
+        var items = expandParas(splitParas(text));
         var targets = opts.linkify === false ? [] : wikiTargets(opts.exclude || {});
         var seen = {};
         var blocks = [];
         var headingSeq = 0, proseRun = 0, leadDone = false;
         var idx = 0;
-        while (idx < paras.length) {
-          var p = paras[idx];
+        while (idx < items.length) {
+          var p = items[idx].text;
+          var pi = items[idx].paraIndex;
           if (isMarkedLine(p)) {
-            var runStart = idx, items = [];
-            while (idx < paras.length && isMarkedLine(paras[idx])) { items.push(stripMarker(paras[idx])); idx++; }
-            if (items.length >= 2) {
-              blocks.push({ type: "list", paraIndex: runStart, html: '<ul class="prose-list">' + items.map(function (l) { return "<li>" + linkifyText(l, targets, seen) + "</li>"; }).join("") + "</ul>" });
+            var runStart = idx, runPi = pi, itemsRun = [];
+            while (idx < items.length && isMarkedLine(items[idx].text)) { itemsRun.push(stripMarker(items[idx].text)); idx++; }
+            if (itemsRun.length >= 2) {
+              blocks.push({ type: "list", paraIndex: runPi, html: '<ul class="prose-list">' + itemsRun.map(function (l) { return "<li>" + linkifyText(l, targets, seen) + "</li>"; }).join("") + "</ul>" });
               proseRun = 0;
               continue;
             }
             idx = runStart;
-            p = paras[idx];
+            p = items[idx].text;
+            pi = items[idx].paraIndex;
           }
           if (isHeadingPara(p)) {
             headingSeq++;
             var htext = p.replace(/:$/, "");
-            blocks.push({ type: "heading", paraIndex: idx, id: "sec-" + headingSeq, text: htext, html: '<h3 class="prose-h" id="sec-' + headingSeq + '">' + linkifyText(htext, targets, seen) + "</h3>" });
+            blocks.push({ type: "heading", paraIndex: pi, id: "sec-" + headingSeq, text: htext, html: '<h3 class="prose-h" id="sec-' + headingSeq + '">' + linkifyText(htext, targets, seen) + "</h3>" });
             proseRun = 0;
             idx++;
             continue;
@@ -816,14 +938,14 @@
               lines = lines.slice(1);
             }
             listHtml += '<ul class="prose-list">' + lines.map(function (l) { return "<li>" + linkifyText(l, targets, seen) + "</li>"; }).join("") + "</ul>";
-            blocks.push({ type: "list", paraIndex: idx, html: listHtml });
+            blocks.push({ type: "list", paraIndex: pi, html: listHtml });
             proseRun = 0;
             idx++;
             continue;
           }
           var flat = p.replace(/\s*\n\s*/g, " ");
           if (isQuotePara(p)) {
-            blocks.push({ type: "quote", paraIndex: idx, html: '<blockquote class="prose-quote">' + linkifyText(flat, targets, seen) + "</blockquote>" });
+            blocks.push({ type: "quote", paraIndex: pi, html: '<blockquote class="prose-quote">' + linkifyText(flat, targets, seen) + "</blockquote>" });
             proseRun = 0;
             idx++;
             continue;
@@ -831,9 +953,9 @@
           var cls = leadDone ? "" : ' class="prose-lead"';
           leadDone = true;
           proseRun++;
-          blocks.push({ type: "p", paraIndex: idx, html: "<p" + cls + ">" + linkifyText(flat, targets, seen) + "</p>" });
-          if (proseRun === 5 && idx < paras.length - 1) {
-            blocks.push({ type: "break", paraIndex: idx, html: '<div class="prose-break" aria-hidden="true"><span></span></div>' });
+          blocks.push({ type: "p", paraIndex: pi, html: "<p" + cls + ">" + linkifyText(flat, targets, seen) + "</p>" });
+          if (proseRun === 5 && idx < items.length - 1) {
+            blocks.push({ type: "break", paraIndex: pi, html: '<div class="prose-break" aria-hidden="true"><span></span></div>' });
             proseRun = 0;
           }
           idx++;
@@ -1082,13 +1204,10 @@
         var out = toc + '<div class="prose-body">';
         function figsAt(n) { figs.filter(function (f) { return f.paragraphIndex === n; }).forEach(function (f) { out += "</div>" + figureHtml(f) + '<div class="prose-body">'; }); }
         figsAt(0);
-        var emitted = {};
-        blocks.forEach(function (b) {
+        blocks.forEach(function (b, bi) {
           out += b.html;
-          if (!emitted[b.paraIndex]) {
-            emitted[b.paraIndex] = true;
-            figsAt(b.paraIndex + 1);
-          }
+          var next = blocks[bi + 1];
+          if (!next || next.paraIndex !== b.paraIndex) figsAt(b.paraIndex + 1);
         });
         figs.filter(function (f) { return f.paragraphIndex > paraCount; }).forEach(function (f) { out += "</div>" + figureHtml(f) + '<div class="prose-body">'; });
         return out + "</div>";
@@ -1920,7 +2039,7 @@
       function loreCard(e) {
         var c = coverOf(e);
         return '<button type="button" class="card" data-lore="' + esc(e.key) + '">'
-          + (c ? framedImgHtml(c, "thumb", "") : '<span class="thumb-placeholder" aria-hidden="true"></span>')
+          + (c ? framedImgHtml(c, "thumb", "") : '<span class="thumb-placeholder"><span class="no-art-tag">No art yet</span></span>')
           + '<span class="pad"><span class="cat">' + esc(e.category) + "</span>"
           + '<span class="name">' + esc(e.title) + "</span>"
           + '<span class="excerpt clamp2">' + esc(firstPara(e.body)) + "</span></span></button>";
@@ -1928,7 +2047,7 @@
       function personCard(p, tall) {
         var c = coverOf(p);
         return '<button type="button" class="card" data-person="' + esc(p.key) + '">'
-          + (c ? framedImgHtml({ url: c.url, fit: c.fit, fx: c.fx, fy: c.fy, zoom: c.zoom }, "thumb thumb-portrait", "") : '<span class="thumb-placeholder portrait" aria-hidden="true"></span>')
+          + (c ? framedImgHtml({ url: c.url, fit: c.fit, fx: c.fx, fy: c.fy, zoom: c.zoom }, "thumb thumb-portrait", "") : '<span class="thumb-placeholder portrait"><span class="no-art-tag">No art yet</span></span>')
           + '<span class="pad"><span class="name">' + esc(p.name) + (p.gmOnly ? ' <span class="gm-badge">GM only</span>' : "") + "</span>"
           + '<span class="role">' + esc(p.role) + "</span>"
           + '<span class="excerpt clamp2">' + esc(p.description) + "</span>"
@@ -1963,7 +2082,7 @@
           + '<h1 class="reader-title">' + esc(e.title) + "</h1>"
           + '<p class="article-meta"><span><strong>' + wordCount + "</strong> words</span><span>About <strong>" + readMin + (readMin === 1 ? " minute" : " minutes") + '</strong> to read</span>' + (e.gmOnly ? '<span class="gm-badge">GM only</span>' : "") + "</p>"
           + '<hr class="rule">'
-          + (c ? framedImgHtml(c, "reader-img", e.title) : "")
+          + (c ? framedImgHtml(c, "reader-img", e.title) : artSuggestHtml("wiki", e.key, e.title))
           + articleBodyHtml(e)
           + relatedHtml
           + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change to this article</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="wiki" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Submit a picture for this article</button></div>';
@@ -1980,6 +2099,7 @@
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
         wireSuggestButtons(main);
+        wireArtSuggest(main);
         wireWikiLinks(main);
         if (gmIsUnlocked()) {
           wireContentTextSections(main);
@@ -2431,7 +2551,7 @@
           rel.pins.slice(0, 2).forEach(function (t) { relChips.push(relChipHtml(t)); });
           var relHtml = relChips.length ? '<div class="rel-chips" style="margin-top:0.625rem">' + relChips.join("") + "</div>" : "";
           html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body, { exclude: { chronKey: e.key } }) + relHtml + textEditBtnHtml("chronicle", e.id)
-            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button></div>' + "</li>";
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Suggest art</button></div>' + "</li>";
         });
         html += "</ol>"
           + '<div style="margin-top:1.5rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1rem"><p style="margin:0"><strong>Missing a moment?</strong></p><p class="small muted" style="margin:0.25rem 0 0">If something happened on the road that the Chronicle does not tell yet, send it in.</p><button type="button" class="btn btn-teal" data-suggest data-suggest-section="chronicle" data-suggest-key="" data-suggest-label="" data-suggest-type="addition" style="margin-top:0.625rem">Submit a Chronicle moment</button></div></div>';
@@ -2661,9 +2781,10 @@
           + (c ? framedImgHtml(c, "reader-img portrait", "Portrait of " + p.name) : "")
           + '<h1 class="reader-title" style="margin-top:0.75rem">' + esc(p.name) + "</h1>"
           + '<p style="margin:0.25rem 0 0;font-weight:500;color:var(--gold)">' + esc(p.role) + "</p>"
-          + '<p class="small muted" style="margin:0">' + kindLabel + " \u00B7 " + esc(p.status) + "</p>"
+          + '<p class="small muted" style="margin:0">' + kindLabel + " \u00B7 " + esc(p.status) + " \u00B7 " + String(p.description || "").split(/\s+/).filter(function (w) { return w; }).length + " words</p>"
           + (p.gmOnly ? '<p style="margin:0.5rem 0 0"><span class="gm-badge">GM only</span></p>' : "")
           + '<hr class="rule">'
+          + (c ? "" : artSuggestHtml("people", p.key, p.name))
           + bodyHtml(p.description, { exclude: { personKey: p.key } })
           + relatedForPersonHtml(p)
           + '<div style="margin-top:1.25rem;border-top:1px solid var(--border);padding-top:0.75rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="update">Suggest a change to this entry</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="people" data-suggest-key="' + esc(p.key) + '" data-suggest-label="' + esc(p.name) + '" data-suggest-type="picture">Submit a portrait or picture</button></div>';
@@ -2675,6 +2796,7 @@
         main.innerHTML = html;
         document.getElementById("backBtn").addEventListener("click", function () { state.reader = null; render(); });
         wireSuggestButtons(main);
+        wireArtSuggest(main);
         wireWikiLinks(main);
         if (gmIsUnlocked()) { wireContentTextSections(main); wireCoverControl(main, "person", p); }
         decorateSiteText(main);
@@ -3032,7 +3154,7 @@
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
         open.forEach(function (t) {
           html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button></div></article>';
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button></div></article>';
         });
         html += "</div>";
         if (!threadsTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">Threads could not be loaded. Live sync is not connected. Try again.</p>';
@@ -3040,7 +3162,7 @@
           html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)" data-st="mysteries.settled">' + esc(stVal("mysteries.settled", "Settled")) + '</h3><div class="stack" style="margin-top:0.75rem">';
           done.forEach(function (t) {
             html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button></div></article>';
+              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button></div></article>';
           });
           html += "</div>";
         }
@@ -3154,6 +3276,142 @@
         var html = '<div class="review-imgs">';
         urls.forEach(function (u) { html += '<a href="' + esc(u) + '" target="_blank" rel="noreferrer"><img src="' + esc(u) + '" alt="Submitted picture" loading="lazy"></a>'; });
         return html + "</div>";
+      }
+      // ---------- Art suggestions on pages with no image ----------
+      // Every article and person page without a picture carries this
+      // panel in place of the missing image: a player picks artwork
+      // files right on the page, previews them, and sends them to the
+      // GM's review queue (uploaded to the submissions folder, links in
+      // the submission text, exactly like the Submit page). Nothing is
+      // placed on the page until the GM approves it. If the send is
+      // refused, the player gets the submission as copyable text plus
+      // the file names, so nothing is lost.
+      var artSuggestSeq = 0;
+      function artSuggestHtml(section, key, label) {
+        artSuggestSeq++;
+        var id = "art" + artSuggestSeq;
+        return '<section class="art-suggest" data-artsuggest="' + id + '" data-art-section="' + esc(section) + '" data-art-key="' + esc(key || "") + '" data-art-label="' + esc(label) + '" aria-label="Suggest art for ' + esc(label) + '">'
+          + '<p class="art-suggest-kicker">No art yet</p>'
+          + "<h2>Suggest art for " + esc(label) + "</h2>"
+          + '<p class="small muted" style="margin:0.375rem 0 0">This page has no picture. If you have artwork, a drawing, or a screenshot that belongs here, upload it: it goes to the GM for review, and the GM places it on the page if it fits.</p>'
+          + '<label class="gm-field"><span>Your name, or your character\u2019s name</span><input type="text" data-art-name class="search-input" autocomplete="name" placeholder="e.g. Paige, playing Buddy"></label>'
+          + '<label class="gm-field"><span>Upload artwork (up to three pictures)</span><input type="file" data-art-files class="search-input" accept="image/*" multiple></label>'
+          + '<div class="sub-previews" data-art-previews></div>'
+          + '<label class="gm-field"><span>Caption or credit <span class="muted" style="font-weight:400">(optional)</span></span><input type="text" data-art-caption class="search-input" placeholder="e.g. ' + esc(label) + ', by Paige"></label>'
+          + '<p class="small" data-art-msg role="status" style="margin:0.5rem 0 0"></p>'
+          + '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" data-art-send>Send art to the GM</button>'
+          + '<button type="button" class="ghost-btn" data-art-describe>No file? Describe the art instead</button></div>'
+          + '<div data-art-result></div></section>';
+      }
+      function wireArtSuggest(root) {
+        if (!root) return;
+        var panels = root.querySelectorAll("[data-artsuggest]");
+        for (var i = 0; i < panels.length; i++) (function (panel) {
+          if (panel.getAttribute("data-art-wired")) return;
+          panel.setAttribute("data-art-wired", "1");
+          var section = panel.getAttribute("data-art-section") || "general";
+          var key = panel.getAttribute("data-art-key") || "";
+          var label = panel.getAttribute("data-art-label") || "";
+          var pending = [];
+          var previews = panel.querySelector("[data-art-previews]");
+          function renderPreviews() {
+            if (!previews) return;
+            if (pending.length === 0) { previews.innerHTML = ""; return; }
+            var out = "";
+            pending.forEach(function (f, idx) {
+              out += '<div class="sub-preview-item"><img src="' + f.url + '" alt=""><span>' + esc(f.file.name) + '</span><button type="button" data-artremove="' + idx + '">Remove</button></div>';
+            });
+            previews.innerHTML = out;
+            var rms = previews.querySelectorAll("[data-artremove]");
+            for (var r = 0; r < rms.length; r++) rms[r].addEventListener("click", function () {
+              var gone = pending.splice(Number(this.getAttribute("data-artremove")), 1)[0];
+              if (gone) { try { URL.revokeObjectURL(gone.url); } catch (e) { /* already gone */ } }
+              renderPreviews();
+            });
+          }
+          var fileInput = panel.querySelector("[data-art-files]");
+          if (fileInput) fileInput.addEventListener("change", function () {
+            var files = this.files || [];
+            for (var j = 0; j < files.length; j++) {
+              if (pending.length >= 3) break;
+              pending.push({ file: files[j], url: URL.createObjectURL(files[j]) });
+            }
+            this.value = "";
+            renderPreviews();
+          });
+          var describeBtn = panel.querySelector("[data-art-describe]");
+          if (describeBtn) describeBtn.addEventListener("click", function () {
+            openSubmit({ section: section, key: key, label: label, type: "picture" });
+          });
+          var sendBtn = panel.querySelector("[data-art-send]");
+          if (sendBtn) sendBtn.addEventListener("click", function () {
+            var msg = panel.querySelector("[data-art-msg]");
+            var result = panel.querySelector("[data-art-result]");
+            var nameEl = panel.querySelector("[data-art-name]");
+            var name = nameEl.value.trim();
+            var caption = panel.querySelector("[data-art-caption]").value.trim();
+            if (!name) { msg.textContent = "Add your name or your character\u2019s name, so the GM knows who sent it."; nameEl.focus(); return; }
+            if (pending.length === 0) { msg.textContent = "Choose at least one picture to upload, or use \u201CDescribe the art instead\u201D."; return; }
+            sendBtn.disabled = true;
+            msg.textContent = "Uploading your pictures\u2026";
+            result.innerHTML = "";
+            var uploaded = [], failed = null, chain = Promise.resolve();
+            pending.forEach(function (f) {
+              chain = chain.then(function () {
+                if (failed) return null;
+                return uploadToStorage(f.file, "submissions", name + "-" + label).then(function (up) {
+                  uploaded.push({ name: f.file.name, url: up.url });
+                }, function () { failed = f.file.name; });
+              });
+            });
+            chain.then(function () {
+              var lines = [];
+              lines.push("Submitted by: " + name);
+              lines.push("Kind: " + submitTypeLabel("picture"));
+              lines.push("Part of the site: " + submitSectionLabel(section));
+              if (label) lines.push("About: " + label + (key ? " (" + key + ")" : ""));
+              lines.push("");
+              lines.push("Art suggested for the page \u201C" + label + "\u201D, which has no picture yet.");
+              if (caption) { lines.push(""); lines.push("Picture caption: " + caption); }
+              if (uploaded.length > 0) {
+                lines.push("");
+                lines.push("Pictures:");
+                uploaded.forEach(function (u) { lines.push("- " + u.name + ": " + u.url); });
+              }
+              var body = lines.join("\n");
+              var title = "Picture: Art for " + label + " \u2014 from " + name;
+              function showFallback(reason) {
+                sendBtn.disabled = false;
+                msg.textContent = "";
+                var packet = "Art suggestion for the Heroes of Oakrest site\n" + title + "\n\n" + body
+                  + "\n\nPictures to send with this text: " + pending.map(function (f) { return f.file.name; }).join(", ");
+                result.innerHTML = '<div class="sub-fallback" role="status"><p style="margin:0"><strong>It could not be sent from here.</strong></p>'
+                  + '<p class="small" style="margin:0.375rem 0 0">' + esc(reason) + " Your suggestion is written out below instead: copy it or download it and hand it to the GM (in Discord, say), with the picture files themselves. Nothing was lost and nothing was posted to the site.</p>"
+                  + '<label class="gm-field"><span>Your suggestion</span><textarea data-art-packet class="search-input" rows="9" readonly>' + esc(packet) + "</textarea></label>"
+                  + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" data-art-copy>Copy the suggestion</button><button type="button" class="btn btn-outline" data-art-download>Download it as a file</button></div>'
+                  + '<p class="small" data-art-copymsg role="status" style="margin:0.5rem 0 0"></p></div>';
+                result.scrollIntoView({ block: "nearest" });
+                result.querySelector("[data-art-copy]").addEventListener("click", function () {
+                  var ta = result.querySelector("[data-art-packet]");
+                  var cm = result.querySelector("[data-art-copymsg]");
+                  function done() { cm.textContent = "Copied. Paste it wherever you reach the GM."; }
+                  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); cm.textContent = "The text is selected: copy it with your keyboard."; });
+                  else { ta.select(); cm.textContent = "The text is selected: copy it with your keyboard."; }
+                });
+                result.querySelector("[data-art-download]").addEventListener("click", function () {
+                  downloadSubmissionText("oakrest-art-" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) + ".txt", packet);
+                });
+              }
+              if (failed) { showFallback("The picture \u201C" + failed + "\u201D could not be uploaded, so the suggestion was not sent half-finished."); return; }
+              msg.textContent = "Sending\u2026";
+              playerSubmitInsert(title, body, key || section).then(function (ok) {
+                if (!ok) { showFallback("Live sync refused the send, or is not connected right now."); return; }
+                panel.innerHTML = '<div class="art-done" role="status"><p style="margin:0"><strong>Art sent to the GM.</strong></p>'
+                  + '<p class="small" style="margin:0.375rem 0 0">Art for \u201C' + esc(label) + "\u201D from " + esc(name) + " is in the review queue, with " + uploaded.length + (uploaded.length === 1 ? " picture" : " pictures") + ". It will appear on this page once the GM has approved it and placed it.</p></div>";
+              });
+            });
+          });
+        })(panels[i]);
       }
       function downloadSubmissionText(filename, text) {
         var blob = new Blob([text], { type: "text/plain;charset=utf-8" });
