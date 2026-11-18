@@ -364,6 +364,11 @@
       .crumbs button { border: 0; background: none; cursor: pointer; font: inherit; font-weight: 500; color: var(--teal); text-decoration: underline; padding: 0; min-height: 2rem; }
       .crumbs .back { margin-left: 0.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; padding: 0.25rem 0.75rem; font-size: 0.75rem; min-height: 2rem; }
       .crumbs .nav-back { margin-left: 0; margin-right: 0.375rem; background: var(--accent-deep); border-color: var(--accent-deep); color: var(--bg); font-weight: 700; max-width: min(70vw, 22rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* Permalink (Copy link) rows */
+      .link-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 0.625rem; margin-top: 0.75rem; }
+      .link-actions .link-hint { flex: 1 1 12rem; }
+      .link-url-box { flex: 1 1 100%; margin-top: 0.25rem; }
+      .thread-card.thread-focus { outline: 1px solid var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
       .crumbs .crumb-current { font-weight: 600; color: var(--text); }
       nav.site-crumbs { margin-top: 0.875rem; }
 
@@ -1366,6 +1371,8 @@
         keepMapView: false,
         addHidden: false,
         submitPrefill: null,
+        threadFocus: null,
+        linkNotice: null,
         mySubmissions: []
       };
 
@@ -1501,6 +1508,205 @@
         if (NAV_STACK.length) applyNavSnapshot(NAV_STACK.pop());
       });
 
+      // ---------- Deep links (permalinks) ----------
+      // Every page on the site has a link of its own, carried in the
+      // address after the #: #/article/<key> for a wiki article,
+      // #/person/<key> for a person, #/chronicle/<key> and
+      // #/timeline/<id> for single moments, #/map/<map>/pin/<id> for a
+      // map pin, #/mysteries/thread-<id> for a thread, and #/<section>
+      // for the sections themselves. render() keeps the address in step
+      // with the page being read, so the address always names the page
+      // on screen; the Copy link buttons on articles, people, moments,
+      // threads, maps, and pins copy the complete public link — the
+      // site's public address plus the page's fragment — so the pasted
+      // text is a full clickable link (in Discord or anywhere else)
+      // that opens straight on that page; and opening an address
+      // carrying one of these fragments lands straight on that page —
+      // the fragment is read at load, held while the live content
+      // loads, and applied as soon as its target exists.
+      // The public address is fixed, not read from the page's own
+      // location: the page also runs inside shells whose address is
+      // not the shareable one.
+      var PUBLIC_SITE_URL = "https://surpentor.github.io/heroes-of-oakrest/";
+      var pendingDeepLink = null;
+      function safeDecode(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
+      function parseHashLink(hash) {
+        if (!hash || hash.indexOf("#/") !== 0) return null;
+        var parts = hash.slice(2).split("/").map(safeDecode);
+        var head = parts[0] || "";
+        if (head === "article" && parts[1]) return { type: "article", key: parts[1] };
+        if (head === "person" && parts[1]) return { type: "person", key: parts[1] };
+        if (head === "chronicle") return { type: "chronicle", key: parts[1] || null };
+        if (head === "timeline") return { type: "timeline", key: parts[1] || null };
+        if (head === "map" && parts[1]) return { type: "map", key: parts[1], pinId: (parts[2] === "pin" && parts[3]) ? Number(parts[3]) : null };
+        if (head === "maps") return { type: "section", key: "maps" };
+        if (head === "mysteries") return { type: "mysteries", key: parts[1] || null };
+        if (head === "gm") return { type: "section", key: "gm" };
+        var sections = ["primer", "wiki", "people", "submit"];
+        for (var i = 0; i < sections.length; i++) if (head === sections[i]) return { type: "section", key: head };
+        return null;
+      }
+      function applyDeepLinkTarget(t) {
+        // Returns "applied", "defer" (the target may exist once the
+        // live content has loaded), or "miss" (loaded, and not there).
+        if (!t) return "miss";
+        if (t.type === "section") {
+          state.reader = null;
+          if (t.key === "gm") state.view = gmIsUnlocked() ? "gm" : "gmsignin";
+          else state.view = t.key;
+          return "applied";
+        }
+        if (t.type === "article") {
+          var e = loreByKey(t.key);
+          if (e) { state.reader = { kind: "lore", entry: e }; state.view = "wiki"; return "applied"; }
+          return dataLoaded ? "miss" : "defer";
+        }
+        if (t.type === "person") {
+          var p = visiblePersonByKey(t.key);
+          if (!p) {
+            // Accept a name slug too, e.g. #/person/zuric-ironshade.
+            var slug = String(t.key).toLowerCase();
+            var list = visiblePeople();
+            for (var i = 0; i < list.length; i++) {
+              if (list[i].name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") === slug) { p = list[i]; break; }
+            }
+          }
+          if (p) { state.reader = { kind: "person", person: p }; state.view = "people"; return "applied"; }
+          return dataLoaded ? "miss" : "defer";
+        }
+        if (t.type === "chronicle") {
+          state.view = "chronicle"; state.reader = null;
+          if (!t.key) return "applied";
+          var found = false;
+          visibleChronicle().forEach(function (c) { if (c.key === t.key) found = true; });
+          if (found) { state.chronicleFocus = t.key; return "applied"; }
+          return dataLoaded ? "miss" : "defer";
+        }
+        if (t.type === "timeline") {
+          state.view = "timeline"; state.reader = null;
+          if (!t.key) return "applied";
+          var ok = false;
+          try { visibleHistory().forEach(function (ev) { if (ev.id === t.key) ok = true; }); } catch (err) { /* history lives in a later script; chronicle check below still runs */ }
+          if (!ok) visibleChronicle().forEach(function (c) { if (c.key === t.key) ok = true; });
+          if (ok) { state.timelineFocus = t.key; return "applied"; }
+          return dataLoaded ? "miss" : "defer";
+        }
+        if (t.type === "map") {
+          if (!MAPS[t.key]) return dataLoaded ? "miss" : "defer";
+          state.view = "maps"; state.reader = null;
+          state.mapKey = t.key;
+          var chain = [], k = t.key, seen = {};
+          while (k && MAPS[k] && MAPS[k].parentKey && !seen[k]) { seen[k] = true; k = MAPS[k].parentKey; chain.unshift(k); }
+          state.mapStack = chain;
+          if (t.pinId != null && isFinite(t.pinId)) {
+            var pin = null;
+            for (var j = 0; j < DATA.pins.length; j++) if (DATA.pins[j].id === t.pinId) pin = DATA.pins[j];
+            if (pin) { state.selectedPinId = pin.id; state.focusPinId = pin.id; state.selectedMarkerId = null; }
+            else if (!dataLoaded) return "defer";
+          }
+          return "applied";
+        }
+        if (t.type === "mysteries") {
+          state.view = "mysteries"; state.reader = null;
+          if (!t.key) return "applied";
+          var tid = String(t.key).replace(/^thread-/, "");
+          var tf = false;
+          DATA.threads.forEach(function (th) { if (String(th.id) === tid) tf = true; });
+          if (tf) { state.threadFocus = tid; return "applied"; }
+          return dataLoaded ? "miss" : "defer";
+        }
+        return "miss";
+      }
+      function deepLinkFallback(t) {
+        state.reader = null;
+        if (t.type === "article") state.view = "wiki";
+        else if (t.type === "person") state.view = "people";
+        else if (t.type === "chronicle") state.view = "chronicle";
+        else if (t.type === "timeline") state.view = "timeline";
+        else if (t.type === "map") state.view = "maps";
+        else if (t.type === "mysteries") state.view = "mysteries";
+        state.linkNotice = "That link pointed to something that could not be found here \u2014 it may have been renamed or removed, or it may be GM-only. You have landed on the nearest section instead.";
+      }
+      function attemptPendingDeepLink() {
+        if (!pendingDeepLink) return;
+        var res = applyDeepLinkTarget(pendingDeepLink);
+        if (res === "applied") pendingDeepLink = null;
+        else if (res === "miss") { deepLinkFallback(pendingDeepLink); pendingDeepLink = null; }
+      }
+      function captureInitialDeepLink() {
+        var t = parseHashLink(window.location.hash || "");
+        if (t) { pendingDeepLink = t; attemptPendingDeepLink(); }
+      }
+      function currentDeepHash() {
+        if (state.reader && state.reader.kind === "lore" && state.reader.entry) return "#/article/" + encodeURIComponent(state.reader.entry.key);
+        if (state.reader && state.reader.kind === "person" && state.reader.person) return "#/person/" + encodeURIComponent(state.reader.person.key);
+        var v = state.view;
+        if (v === "maps") return "#/map/" + encodeURIComponent(state.mapKey || "caldaryn") + (state.selectedPinId != null ? "/pin/" + state.selectedPinId : "");
+        if (v === "chronicle") return state.chronicleFocus ? "#/chronicle/" + encodeURIComponent(state.chronicleFocus) : "#/chronicle";
+        if (v === "timeline") return state.timelineFocus ? "#/timeline/" + encodeURIComponent(state.timelineFocus) : "#/timeline";
+        if (v === "mysteries") return state.threadFocus ? "#/mysteries/thread-" + state.threadFocus : "#/mysteries";
+        if (v === "gm" || v === "gmsignin") return "#/gm";
+        return "#/" + v;
+      }
+      function syncDeepLinkHash() {
+        // While a deep link is still waiting for the live content, the
+        // address keeps the fragment it arrived with.
+        if (pendingDeepLink) return;
+        var h = currentDeepHash();
+        if (!h || window.location.hash === h) return;
+        try { history.replaceState({ hooNav: navHistDepth }, "", h); } catch (e) { /* history unavailable; a copied link still opens its page fresh */ }
+      }
+      window.addEventListener("hashchange", function () {
+        // Fires when a link is followed in this same tab (or the
+        // address is edited by hand). In-page anchors — the contents
+        // headings inside an article — are not page links and pass by.
+        var t = parseHashLink(window.location.hash || "");
+        if (!t) return;
+        pendingDeepLink = t;
+        attemptPendingDeepLink();
+        render();
+        if (t.type === "article" || t.type === "person" || t.type === "section" || t.type === "map") window.scrollTo(0, 0);
+      });
+      function copyLinkBtnHtml(hash, label, cls) {
+        return '<button type="button" class="' + (cls || "ghost-btn") + '" data-copylink="' + esc(hash) + '">' + esc(label) + '</button> <span class="small muted" data-copymsg role="status"></span>';
+      }
+      function wireCopyLinks(root) {
+        if (!root) return;
+        var btns = root.querySelectorAll("[data-copylink]");
+        for (var i = 0; i < btns.length; i++) (function (btn) {
+          if (btn.getAttribute("data-copylink-wired")) return;
+          btn.setAttribute("data-copylink-wired", "1");
+          btn.addEventListener("click", function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            // The button copies this page's complete public link: the
+            // site's public address plus the page's fragment (the part
+            // starting with #). The fragment alone is not a working
+            // link — pasted into Discord it is not clickable and opens
+            // nothing — so the full address always goes out.
+            var ending = btn.getAttribute("data-copylink");
+            var fullLink = PUBLIC_SITE_URL + ending;
+            var msg = null;
+            if (btn.nextElementSibling && btn.nextElementSibling.hasAttribute("data-copymsg")) msg = btn.nextElementSibling;
+            else if (btn.parentNode) msg = btn.parentNode.querySelector("[data-copymsg]");
+            function done() { if (msg) msg.textContent = "Link copied \u2014 paste it in Discord and it opens right here."; }
+            function fallback() {
+              var box = btn.parentNode ? btn.parentNode.querySelector(".link-url-box") : null;
+              if (!box && btn.parentNode) {
+                box = document.createElement("input");
+                box.type = "text"; box.readOnly = true;
+                box.className = "search-input link-url-box";
+                box.setAttribute("aria-label", "Link for this page");
+                btn.parentNode.appendChild(box);
+              }
+              if (box) { box.value = fullLink; box.focus(); box.select(); }
+              if (msg) msg.textContent = "Copy the full link from the box below \u2014 paste it in Discord and it opens right here.";
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(fullLink).then(done, fallback);
+            else fallback();
+          });
+        })(btns[i]);
+      }
+
       // ---------- GM gate (server-side, through the get_gm_content RPC) ----------
       var GM_SESSION_KEY = "hoo2.gm.session";
       var gmPayload = null;
@@ -1583,7 +1789,7 @@
         }, function () { return false; });
       }
       function loadLive() {
-        if (!sb) { dataLoaded = true; syncConnected = false; render(); return; }
+        if (!sb) { dataLoaded = true; syncConnected = false; attemptPendingDeepLink(); render(); return; }
         var jobs = [];
         jobs.push(sb.from("lore_entries").select("id,title,body,category,visibility,is_hand_edited,source_key,image_key,source_url,status,cover_image_url,cover_storage_path,cover_fit,cover_position,cover_focal_x,cover_focal_y,cover_zoom,cover_image_id").eq("visibility", "player").order("title").then(function (res) {
           loreTableOk = !res.error; if (!res.error) DATA.lore = (res.data || []).map(mapLoreRow);
@@ -1656,6 +1862,7 @@
             var keys = Object.keys(MAPS);
             if (keys.length > 0 && keys.indexOf("caldaryn") === -1) state.mapKey = keys[0];
           }
+          attemptPendingDeepLink();
           render();
         });
       }
@@ -1805,6 +2012,7 @@
       }
       function render() {
         trackNavLocation();
+        syncDeepLinkHash();
         state.sizePreview = {};
         if (state.view !== "maps") state.keepMapView = false;
         renderHeaderText();
@@ -1823,6 +2031,15 @@
         else if (state.view === "submit") renderSubmit(main);
         else if (state.view === "gmsignin") renderGmSignIn(main);
         else if (state.view === "gm") renderGm(main);
+        if (state.linkNotice) {
+          var notice = document.createElement("p");
+          notice.className = "small";
+          notice.setAttribute("role", "status");
+          notice.style.cssText = "margin-top:1rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:0.625rem 0.75rem";
+          notice.textContent = state.linkNotice;
+          main.insertBefore(notice, main.firstChild);
+          state.linkNotice = null;
+        }
         var foot = document.createElement("footer");
         foot.className = "site";
         foot.innerHTML = esc(siteText("footer.sync")) + '<br><span data-sync-status>' + esc(syncLine()) + "</span>";
@@ -2219,6 +2436,7 @@
           + '<p class="reader-cat">' + esc(e.category) + "</p>"
           + '<h1 class="reader-title">' + esc(e.title) + "</h1>"
           + '<p class="article-meta"><span><strong>' + wordCount + "</strong> words</span><span>About <strong>" + readMin + (readMin === 1 ? " minute" : " minutes") + '</strong> to read</span>' + (e.gmOnly ? '<span class="gm-badge">GM only</span>' : "") + "</p>"
+          + '<div class="link-actions">' + copyLinkBtnHtml("#/article/" + e.key, "Copy link to this article") + '<span class="small muted link-hint">Copies this article\u2019s full link \u2014 paste it in Discord and anyone opening it lands straight on this article.</span></div>'
           + '<hr class="rule">'
           + (c ? framedImgHtml(c, "reader-img", e.title) : artSuggestHtml("wiki", e.key, e.title))
           + articleBodyHtml(e)
@@ -2239,6 +2457,7 @@
         wireSuggestButtons(main);
         wireArtSuggest(main);
         wireWikiLinks(main);
+        wireCopyLinks(main);
         if (gmIsUnlocked()) {
           wireContentTextSections(main);
           wireCoverControl(main, "lore", e);
@@ -2689,7 +2908,7 @@
           rel.pins.slice(0, 2).forEach(function (t) { relChips.push(relChipHtml(t)); });
           var relHtml = relChips.length ? '<div class="rel-chips" style="margin-top:0.625rem">' + relChips.join("") + "</div>" : "";
           html += '<li id="chron-' + esc(e.key) + '" data-chron="' + esc(e.key) + '"' + (focus ? ' class="chron-focus"' : "") + '><span class="dot" aria-hidden="true"></span><p class="date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p><h3>" + esc(e.title) + "</h3>" + bodyHtml(e.body, { exclude: { chronKey: e.key } }) + relHtml + textEditBtnHtml("chronicle", e.id)
-            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Suggest art</button></div>' + "</li>";
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="chronicle" data-suggest-key="' + esc(e.key) + '" data-suggest-label="' + esc(e.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/chronicle/" + e.key, "Copy link") + "</div>" + "</li>";
         });
         html += "</ol>"
           + '<div style="margin-top:1.5rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1rem"><p style="margin:0"><strong>Missing a moment?</strong></p><p class="small muted" style="margin:0.25rem 0 0">If something happened on the road that the Chronicle does not tell yet, send it in.</p><button type="button" class="btn btn-teal" data-suggest data-suggest-section="chronicle" data-suggest-key="" data-suggest-label="" data-suggest-type="addition" style="margin-top:0.625rem">Submit a Chronicle moment</button></div></div>';
@@ -2697,6 +2916,7 @@
         wireTextEditButtons(main);
         wireSuggestButtons(main);
         wireWikiLinks(main);
+        wireCopyLinks(main);
         if (state.chronicleFocus) {
           var target = main.querySelector('[data-chron="' + state.chronicleFocus + '"]');
           state.chronicleFocus = null;
@@ -2852,16 +3072,17 @@
                   + '<h3 data-st="history.' + ev.id + '.title">' + esc(stVal("history." + ev.id + ".title", ev.title)) + "</h3>"
                   + '<p class="tl-desc" data-st="history.' + ev.id + '.desc">' + linkifyText(stVal("history." + ev.id + ".desc", ev.description), wikiTargets({ histId: ev.id }), {}) + "</p>"
                   + historyLinksHtml(ev)
+                  + '<div class="tl-links">' + copyLinkBtnHtml("#/timeline/" + ev.id, "Copy link", "tl-link") + "</div>"
                   + "</article></li>";
               } else {
                 var e = item.e;
                 var isGm = !!e.gmOnly;
                 var rel = chronicleRelations(e);
-                html += '<li class="tl-item' + alt + (isGm ? " gm" : "") + '"><span class="tl-dot" aria-hidden="true"></span>'
+                html += '<li class="tl-item' + alt + (isGm ? " gm" : "") + (state.timelineFocus === e.key ? " tl-focus" : "") + '" id="tl-' + esc(e.key) + '"><span class="tl-dot" aria-hidden="true"></span>'
                   + '<article class="tl-card"><p class="tl-date">' + esc(e.date) + (isGm ? ' \u00B7 <span class="gm-badge">GM only</span>' : "") + "</p>"
                   + "<h3>" + esc(e.title) + "</h3>"
                   + '<p class="tl-excerpt">' + esc(firstPara(e.body)) + "</p>"
-                  + '<div class="tl-links"><button type="button" class="tl-link primary" data-tl-chron="' + esc(e.key) + '">Read in the Chronicle</button>';
+                  + '<div class="tl-links"><button type="button" class="tl-link primary" data-tl-chron="' + esc(e.key) + '">Read in the Chronicle</button>' + copyLinkBtnHtml("#/timeline/" + e.key, "Copy link", "tl-link");
                 rel.lore.forEach(function (l) {
                   html += '<button type="button" class="tl-link" data-tl-lore="' + esc(l.key) + '">Article: ' + esc(l.title) + "</button>";
                 });
@@ -2884,6 +3105,7 @@
         html += "</div>";
         main.innerHTML = html;
         wireTextEditButtons(main);
+        wireCopyLinks(main);
         var chronBtns = main.querySelectorAll("[data-tl-chron]");
         for (var i = 0; i < chronBtns.length; i++) chronBtns[i].addEventListener("click", function () {
           state.chronicleFocus = this.getAttribute("data-tl-chron");
@@ -2920,6 +3142,7 @@
           + '<h1 class="reader-title" style="margin-top:0.75rem">' + esc(p.name) + "</h1>"
           + '<p style="margin:0.25rem 0 0;font-weight:500;color:var(--gold)">' + esc(p.role) + "</p>"
           + '<p class="small muted" style="margin:0">' + kindLabel + " \u00B7 " + esc(p.status) + " \u00B7 " + String(p.description || "").split(/\s+/).filter(function (w) { return w; }).length + " words</p>"
+          + '<div class="link-actions">' + copyLinkBtnHtml("#/person/" + p.key, "Copy link to this entry") + '<span class="small muted link-hint">Copies this entry\u2019s full link \u2014 paste it in Discord and anyone opening it lands straight on this entry.</span></div>'
           + (p.gmOnly ? '<p style="margin:0.5rem 0 0"><span class="gm-badge">GM only</span></p>' : "")
           + '<hr class="rule">'
           + (c ? "" : artSuggestHtml("people", p.key, p.name))
@@ -2936,6 +3159,7 @@
         wireSuggestButtons(main);
         wireArtSuggest(main);
         wireWikiLinks(main);
+        wireCopyLinks(main);
         if (gmIsUnlocked()) { wireContentTextSections(main); wireCoverControl(main, "person", p); }
         decorateSiteText(main);
       }
@@ -3291,16 +3515,16 @@
         var done = DATA.threads.filter(function (t) { return t.status === "resolved"; });
         var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="mysteries.title">' + esc(stVal("mysteries.title", "Open Threads and Mysteries")) + "</h2>" + syncNoticeHtml() + '<div class="stack" style="margin-top:1rem">';
         open.forEach(function (t) {
-          html += '<article class="thread-card"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button></div></article>';
+          html += '<article class="thread-card' + (state.threadFocus === String(t.id) ? " thread-focus" : "") + '" id="thread-' + t.id + '"><h3>' + esc(t.title) + "</h3>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
+            + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Add to this thread</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/mysteries/thread-" + t.id, "Copy link") + "</div></article>";
         });
         html += "</div>";
         if (!threadsTableOk && dataLoaded) html += '<p style="margin-top:2rem;text-align:center" class="muted">Threads could not be loaded. Live sync is not connected. Try again.</p>';
         if (done.length > 0) {
           html += '<h3 class="font-display" style="margin:2rem 0 0;font-size:1.25rem;font-weight:600;color:var(--accent-deep)" data-st="mysteries.settled">' + esc(stVal("mysteries.settled", "Settled")) + '</h3><div class="stack" style="margin-top:0.75rem">';
           done.forEach(function (t) {
-            html += '<article class="thread-card settled"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
-              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button></div></article>';
+            html += '<article class="thread-card settled' + (state.threadFocus === String(t.id) ? " thread-focus" : "") + '" id="thread-' + t.id + '"><h4>' + esc(t.title) + "</h4>" + bodyHtml(t.detail) + textEditBtnHtml("thread", t.id)
+              + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="update">Suggest a change</button> <button type="button" class="ghost-btn" data-suggest data-suggest-section="mysteries" data-suggest-key="thread-' + t.id + '" data-suggest-label="' + esc(t.title) + '" data-suggest-type="picture">Suggest art</button> ' + copyLinkBtnHtml("#/mysteries/thread-" + t.id, "Copy link") + "</div></article>";
           });
           html += "</div>";
         }
@@ -3309,6 +3533,12 @@
         wireTextEditButtons(main);
         wireSuggestButtons(main);
         wireWikiLinks(main);
+        wireCopyLinks(main);
+        if (state.threadFocus) {
+          var threadTarget = document.getElementById("thread-" + state.threadFocus);
+          state.threadFocus = null;
+          if (threadTarget) threadTarget.scrollIntoView({ block: "center" });
+        }
         decorateSiteText(main);
       }
     </script>
@@ -3399,12 +3629,17 @@
         return sb.from("review_items").insert({ kind: "player_submission", title: title, body: body, question: title, source_note: body, status: "pending", related_key: relatedKey || null }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
       }
       function reviewImageUrls(body) {
+        // Only pictures stored in this site's own image bucket are
+        // rendered as images in the GM review view. A submission body
+        // is player-written text: a pasted link to any other host is
+        // shown in the submission text itself, but never auto-loaded
+        // as an image in the GM's browser.
         var urls = [], seen = {};
         var re = /https?:\/\/[^\s<)"']+/g, m;
         var text = String(body || "");
         while ((m = re.exec(text)) !== null) {
           var u = m[0].replace(/[.,;]+$/, "");
-          if ((/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(u) || u.indexOf("content-images") !== -1) && !seen[u]) { seen[u] = true; urls.push(u); }
+          if (u.indexOf(SUPABASE_URL + "/storage/") === 0 && u.indexOf("content-images") !== -1 && !seen[u]) { seen[u] = true; urls.push(u); }
         }
         return urls;
       }
@@ -4282,12 +4517,16 @@
         if (person) html += '<button type="button" class="btn btn-outline" id="pinOpenPerson">Its people</button>';
         html += '<button type="button" class="btn btn-outline" id="pinZoom">Zoom to pin</button>';
         html += '<button type="button" class="btn btn-outline" id="pinSuggest">Suggest a change</button>';
+        html += copyLinkBtnHtml("#/map/" + encodeURIComponent(pin.mapKey) + "/pin/" + pin.id, "Copy link to this pin", "btn btn-outline");
         if (canEditText()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit text</button>';
         html += "</div></section>";
         container.innerHTML = html;
         wireWikiLinks(container);
+        wireCopyLinks(container);
+        syncDeepLinkHash();
         document.getElementById("pinClose").addEventListener("click", function () {
           state.selectedPinId = null;
+          syncDeepLinkHash();
           if (stage) stage.refreshPins();
           renderPinPanel(container);
         });
@@ -5085,6 +5324,7 @@
         html += '<div class="chiprow" style="margin-top:0.75rem">'
           + '<button type="button" class="ghost-btn" id="togglePins" aria-pressed="' + state.showPins + '">' + (state.showPins ? "Hide pins" : "Show pins") + "</button>"
           + '<button type="button" class="ghost-btn" id="toggleLabels" aria-pressed="' + state.showLabels + '">' + (state.showLabels ? "Hide labels" : "Show labels") + "</button>"
+          + copyLinkBtnHtml("#/map/" + encodeURIComponent(state.mapKey), "Copy link to this map")
           + "</div>";
         if (gmIsUnlocked()) {
           html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to rename it, change its icon, lock or unlock it, hide or reveal it, duplicate, or delete it. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
@@ -5209,6 +5449,7 @@
           if (fp) { stage.zoomToPoint(fp.x, fp.y); }
           state.focusPinId = null;
         }
+        wireCopyLinks(main);
         var chips = main.querySelectorAll("[data-mapchip]");
         for (var a = 0; a < chips.length; a++) chips[a].addEventListener("click", function () { goMap(this.getAttribute("data-mapchip")); });
         var back = document.getElementById("crumbBack");
@@ -5240,6 +5481,7 @@
         decorateSiteText(main);
       }
 
+      captureInitialDeepLink();
       render();
       loadLive();
     </script>
