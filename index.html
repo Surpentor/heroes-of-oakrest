@@ -37,7 +37,13 @@
       button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
       input[type="range"] { min-height: 2rem; }
       .font-display { font-family: var(--font-display); }
-      .wrap { margin: 0 auto; max-width: 56rem; padding: 0 1rem; }
+      .wrap { margin: 0 auto; max-width: 80rem; padding: 0 1rem; }
+      /* Full-width breakout for the map view: the map section spans
+         about 95% of the viewport even though it lives inside the
+         centred .wrap column, so the map and its side panel get the
+         whole screen width. Centred by offsetting half the container
+         against half the breakout width. */
+      .map-breakout { width: 95vw; max-width: 95vw; margin-left: calc(50% - 47.5vw); margin-right: calc(50% - 47.5vw); }
       main { padding-bottom: 4rem; }
 
       /* Header */
@@ -307,9 +313,10 @@
       .compass-rose.off { opacity: 0.45; }
       .compass-rose.gm-drag { pointer-events: auto; cursor: grab; touch-action: none; }
       .map-frame {
-        position: relative; height: 62dvh; min-height: 340px; touch-action: none; user-select: none; -webkit-user-select: none;
+        position: relative; height: calc(100dvh - 15.5rem); min-height: 380px; touch-action: none; user-select: none; -webkit-user-select: none;
         overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt);
       }
+      @media (max-width: 899px) { .map-frame { height: 62dvh; min-height: 340px; } }
       .map-frame:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
       .map-inner { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; }
       .map-inner > img { display: block; width: 100%; }
@@ -383,13 +390,14 @@
          map first, panel underneath. The side column sticks in place
          on wide screens so the description stays in view while the
          pin list below is browsed. */
-      .map-layout { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+      .map-layout { display: grid; gap: 1rem; margin-top: 0.75rem; }
       .map-main, .map-side { min-width: 0; }
       .map-side .pin-panel { margin-top: 0; }
       .map-side-hint { border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; font-size: 0.875rem; line-height: 1.55; color: var(--dim); }
       @media (min-width: 900px) {
-        .map-layout { grid-template-columns: minmax(0, 1fr) 20rem; align-items: start; }
+        .map-layout { grid-template-columns: minmax(0, 1fr) 420px; align-items: start; }
         .map-side { position: sticky; top: 7.5rem; max-height: calc(100dvh - 8.5rem); overflow-y: auto; }
+        .map-side .pin-panel { max-height: calc(100dvh - 8.5rem); overflow-y: auto; }
       }
       .pin-panel .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
       .pin-panel h3 { font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; margin: 0; }
@@ -401,6 +409,7 @@
       .pin-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.5rem; align-items: stretch; }
       .pin-list > li { min-width: 0; height: 100%; }
       @media (min-width: 640px) { .pin-list { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+      @media (min-width: 1200px) { .pin-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
       .pin-list button { display: block; width: 100%; height: 100%; min-width: 0; text-align: left; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0.5rem 0.75rem; font-size: 0.875rem; cursor: pointer; font: inherit; color: inherit; }
       .pin-list .num { font-weight: 700; color: var(--gold); }
       .pin-list .note { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
@@ -5846,7 +5855,7 @@
         var pins = visiblePins().filter(function (p) { return p.mapKey === state.mapKey; });
         var markersHere = visibleMarkers(state.mapKey);
 
-        var html = '<div style="margin-top:1.5rem"><h2 class="view-title" data-st="maps.title">' + esc(stVal("maps.title", "Maps of Caldaryn")) + "</h2>"
+        var html = '<div class="map-breakout" style="margin-top:1.5rem"><h2 class="view-title" data-st="maps.title">' + esc(stVal("maps.title", "Maps of Caldaryn")) + "</h2>"
           + '<p class="small muted" style="margin-top:0.25rem" data-st="maps.intro">' + esc(siteText("maps.intro")) + "</p>";
         if (state.mapStack.length > 0) {
           html += '<div class="crumbs"><button type="button" class="back" id="crumbBack" style="margin-left:0">Back</button></div>';
