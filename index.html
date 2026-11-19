@@ -295,7 +295,7 @@
       .map-pin.diamond.pending .pin-head { background: var(--gold); border-style: dashed; }
       .pin-tip {
         position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
-        max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        width: max-content; max-width: 180px; white-space: normal; overflow-wrap: break-word; text-align: center;
         background: #0c0e0a; color: #fbf7ec; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px;
         font-size: 11px; font-weight: 600; line-height: 1.4; pointer-events: none;
         opacity: 0; transition: opacity 0.15s ease; z-index: 6;
@@ -331,18 +331,23 @@
       .map-pin.art { height: 2.75rem; width: 2.75rem; min-height: 2.75rem; background: #ece5cd; padding: 2px; }
       .map-pin.art img { height: 100%; width: 100%; object-fit: contain; display: block; }
       .map-pin .badge { position: absolute; bottom: -4px; right: -4px; display: flex; align-items: center; justify-content: center; height: 18px; min-width: 18px; border-radius: 999px; border: 1px solid #fff; background: var(--gold); padding: 0 2px; font-size: 10px; font-weight: 700; color: #fff; }
-      /* Map labels live in map space with their icon: centered directly
-         underneath it, and scaling with the map like its printed names.
-         The one exception is the party marker: its wrap is
-         counter-scaled against the zoom (see applyElTransform), so the
-         party marker and its label keep a constant size on screen. */
+      /* Map labels sit centered directly underneath their icon, inside
+         the same wrap, so they travel with it. Every wrap — pins,
+         markers, and the party marker alike — is counter-scaled
+         against the zoom (see applyElTransform), so icons and labels
+         keep a constant size on screen at any zoom instead of growing
+         and shrinking with the map image. Labels wrap onto a second or
+         third line once they pass a modest width, so a long name makes
+         a compact stacked label instead of a wide banner stretching
+         across neighbouring hexes. The font size itself is per item
+         (see labelSize) and is set inline by buildPins. */
       .map-label {
         position: absolute; left: 50%; top: calc(100% + 4px); transform: translateX(-50%);
-        max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        width: max-content; max-width: 7.25rem; white-space: normal; overflow-wrap: break-word;
         text-align: center;
-        border: 1px solid var(--border); border-radius: 999px;
+        border: 1px solid var(--border); border-radius: 10px;
         background: color-mix(in srgb, var(--surface) 92%, transparent);
-        padding: 1px 7px; font-size: 11px; font-weight: 600; line-height: 1.35; color: var(--text);
+        padding: 2px 7px 3px; font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--text);
         box-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none;
       }
       .map-controls { position: absolute; left: 0.5rem; top: 0.5rem; z-index: 10; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -435,6 +440,25 @@
       .icon-cell.armed { outline: 2px solid var(--teal); background: var(--surface-alt); }
       .map-dialog-backdrop { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 1rem; }
       .map-dialog { width: min(26rem, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 1rem; box-shadow: 0 10px 32px rgba(0,0,0,0.65); }
+      /* Docked variant, used by the size editor: no dimmed full-screen
+         backdrop and the panel hugs the bottom edge, so the item being
+         resized stays visible on the map above it while the sliders
+         move. The backdrop lets pointer events through everywhere
+         except the panel itself, so the map can still be panned and
+         zoomed with the editor open. */
+      .map-dialog-backdrop.docked { background: transparent; align-items: flex-end; justify-content: center; padding: 0.5rem; pointer-events: none; }
+      .map-dialog-backdrop.docked .map-dialog { pointer-events: auto; width: min(30rem, 100%); max-height: min(56dvh, 30rem); border-color: var(--gold); }
+      /* Live preview inside the size editor: the icon and its wrapped
+         label at exactly the sizes the sliders are set to, on a
+         map-grass ground, so the result is checkable even before
+         looking back at the map. */
+      .size-preview { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); background: #93ad7a; padding: 0.875rem 0.5rem; overflow: hidden; }
+      .size-preview .sp-iconbox { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
+      .size-preview .sp-icon-inner { display: flex; align-items: center; justify-content: center; transform-origin: 50% 50%; }
+      .size-preview .sp-art { display: flex; align-items: center; justify-content: center; height: 2.75rem; width: 2.75rem; border-radius: 50%; border: 2px solid #fff; background: #ece5cd; padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.55); }
+      .size-preview .sp-art img { height: 100%; width: 100%; object-fit: contain; display: block; }
+      .size-preview .sp-glyph { display: flex; align-items: center; justify-content: center; height: 2.75rem; width: 2.75rem; border-radius: 50%; border: 2px solid #fff; background: var(--gold); color: #fff; font-size: 20px; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,0.55); }
+      .size-preview .sp-label { width: max-content; max-width: 7.25rem; white-space: normal; overflow-wrap: break-word; text-align: center; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--surface) 92%, transparent); padding: 2px 7px 3px; font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
       .map-dialog h3 { font-family: var(--font-display); font-size: 1.125rem; margin: 0; }
       .map-status { margin-top: 0.75rem; border: 1px solid var(--teal); border-radius: var(--radius); background: var(--surface); padding: 0.5rem 0.75rem; font-size: 0.875rem; }
       .map-status:empty { display: none; }
@@ -1173,10 +1197,10 @@
       // map_pins and map_markers have no size or link columns, so these live
       // as JSON in the site_text table (publicly readable, GM-writable by
       // upsert, the same store the site wording editor uses).
-      var MAP_EXTRAS = { sizes: {}, links: {}, compass: {}, locks: {} };
+      var MAP_EXTRAS = { sizes: {}, textSizes: {}, links: {}, compass: {}, locks: {} };
       function parseExtras() {
-        MAP_EXTRAS = { sizes: {}, links: {}, compass: {}, locks: {} };
-        [["map_item_sizes", "sizes"], ["map_marker_links", "links"], ["map_compass", "compass"], ["map_item_locks", "locks"]].forEach(function (pair) {
+        MAP_EXTRAS = { sizes: {}, textSizes: {}, links: {}, compass: {}, locks: {} };
+        [["map_item_sizes", "sizes"], ["map_label_sizes", "textSizes"], ["map_marker_links", "links"], ["map_compass", "compass"], ["map_item_locks", "locks"]].forEach(function (pair) {
           var raw = SITE_TEXT[pair[0]];
           if (!raw) return;
           try { var v = JSON.parse(raw); if (v && typeof v === "object") MAP_EXTRAS[pair[1]] = v; } catch (e) { /* keep defaults */ }
@@ -1184,7 +1208,7 @@
       }
       function saveExtras(kind, key) {
         if (!sb || !gmIsUnlocked()) return Promise.resolve(false);
-        var storeKey = kind === "sizes" ? "map_item_sizes" : kind === "links" ? "map_marker_links" : kind === "locks" ? "map_item_locks" : "map_compass";
+        var storeKey = kind === "sizes" ? "map_item_sizes" : kind === "textSizes" ? "map_label_sizes" : kind === "links" ? "map_marker_links" : kind === "locks" ? "map_item_locks" : "map_compass";
         SITE_TEXT[storeKey] = JSON.stringify(MAP_EXTRAS[kind]);
         return sb.from("site_text").upsert({ text_key: storeKey, value: SITE_TEXT[storeKey], updated_by: "gm" }, { returning: "minimal" }).then(function (res) { return !res.error; }, function () { return false; });
       }
@@ -1203,28 +1227,44 @@
         return false;
       }
       function itemSize(kind, id) {
-        // The party marker is exempt from manual sizing and from map
-        // scaling: its base factor is always 1, and applyElTransform
-        // counter-scales it against the zoom so it keeps a constant
-        // size on screen at any zoom. Any size stored or previewed
-        // for it is ignored.
-        if (isPartyMarker(kind, id)) return 1;
+        // Every pin and marker — the party marker included — behaves
+        // the same way: applyElTransform counter-scales its wrap
+        // against the zoom, so it keeps a constant size on screen at
+        // any zoom, and this factor is the GM's per-item size on top
+        // of that. A GM can resize any of them individually (see
+        // openSizeDialog); a stored size always wins over the default.
         var key = kind + "-" + id;
         if (state.sizePreview && state.sizePreview[key] != null) return state.sizePreview[key];
         var v = Number(MAP_EXTRAS.sizes[key]);
-        // Default for pins and non-party markers is 0.75, not 1: at full
-        // size they dwarfed the icons and names printed on the map
-        // itself. A GM can resize any of them individually (see
-        // openSizeDialog); a stored size always wins over this default.
-        // The accepted floor is 0.1, not 0.4: a hex cell is only about
-        // 1.6% of the map's width, so even the old 40% minimum left a
-        // pin wider than one hex. 10% lets an item shrink until it
-        // sits inside a single hex cell.
-        return isFinite(v) && v >= 0.1 && v <= 2.5 ? v : 0.75;
+        if (isFinite(v) && v >= 0.1 && v <= 2.5) return v;
+        // Default for pins and ordinary markers is 0.75, not 1: at
+        // full size they dwarfed the icons and names printed on the
+        // map itself. The party marker defaults to 1 so it stays as
+        // prominent as it has always been. The accepted floor is 0.1,
+        // not 0.4: a hex cell is only about 1.6% of the map's width,
+        // so even the old 40% minimum left a pin wider than one hex.
+        // 10% lets an item shrink until it sits inside a single hex.
+        return isPartyMarker(kind, id) ? 1 : 0.75;
       }
       function setItemSize(kind, id, factor) {
         MAP_EXTRAS.sizes[kind + "-" + id] = Math.round(factor * 100) / 100;
         return saveExtras("sizes");
+      }
+      // Per-item label text size, stored the same way as icon sizes.
+      // 1 is the standard 11px label; the range runs 0.5 to 2.
+      function labelSize(kind, id) {
+        var key = kind + "-" + id;
+        if (state.labelPreview && state.labelPreview[key] != null) return state.labelPreview[key];
+        var v = Number(MAP_EXTRAS.textSizes[key]);
+        return isFinite(v) && v >= 0.5 && v <= 2 ? v : 1;
+      }
+      function setLabelSize(kind, id, factor) {
+        MAP_EXTRAS.textSizes[kind + "-" + id] = Math.round(factor * 100) / 100;
+        return saveExtras("textSizes");
+      }
+      function labelHtml(kind, id, text) {
+        var px = Math.round(11 * labelSize(kind, id) * 10) / 10;
+        return '<span class="map-label" style="font-size:' + px + 'px">' + esc(text) + "</span>";
       }
       function markerLink(m) {
         var v = MAP_EXTRAS.links["marker-" + m.id];
@@ -1441,6 +1481,7 @@
         mapToolMode: null,
         toolPinId: null,
         sizePreview: {},
+        labelPreview: {},
         pendingIconKey: null,
         mapMsg: "",
         deleteArmedKey: null,
@@ -2095,6 +2136,7 @@
         trackNavLocation();
         syncDeepLinkHash();
         state.sizePreview = {};
+        state.labelPreview = {};
         if (state.view !== "maps") state.keepMapView = false;
         renderHeaderText();
         renderNav();
@@ -4195,25 +4237,23 @@
           var bottom = el.getAttribute("data-anchor") === "bottom";
           var anch = bottom ? "translate(-50%,-100%)" : "translate(-50%,-50%)";
           var sf = Number(el.getAttribute("data-size")) || 1;
-          // Pins, non-party markers, and their labels are part of the
-          // map layer: they sit inside the map's own scaled element and
-          // are NOT counter-scaled against the zoom, so they grow and
-          // shrink with the map image exactly like the names and icons
-          // printed on the map itself. Zooming out no longer leaves
-          // full-size pins floating over a shrunken map. sf is only the
-          // GM's per-item size factor, applied around the anchor point
-          // itself (the tip for bottom-anchored pins) so resizing never
-          // moves the point the item sits on.
-          // The party marker is the one exception: it is exempt from
-          // map scaling and must keep a constant size on screen at any
-          // zoom, so it is counter-scaled against the current zoom
-          // (sf / scale). Its wrap lives inside the scaled map element,
-          // so dividing by the live zoom cancels the map's own scale:
-          // zoomed out it grows in map space, zoomed in it shrinks,
-          // and on screen it never changes size. applyView re-runs this
-          // for every item on every zoom change, so the counter-scale
-          // always tracks the current zoom.
-          var eff = el.getAttribute("data-party") === "1" ? sf / (scale || 1) : sf;
+          // Every pin and marker — the party marker included — behaves
+          // the same way: its wrap lives inside the map's own scaled
+          // element, so it is counter-scaled against the current zoom
+          // (sf / scale), which cancels the map's own scale. Zoomed
+          // out an item grows in map space, zoomed in it shrinks, and
+          // on screen it never changes size: pins hold a steady,
+          // readable size at any zoom instead of ballooning over the
+          // hexes when zoomed in or vanishing when zoomed out, exactly
+          // as the party marker has always done. sf is the GM's
+          // per-item size factor, applied around the anchor point
+          // itself (the tip for bottom-anchored pins) so resizing
+          // never moves the point the item sits on. applyView re-runs
+          // this for every item on every zoom change, so the
+          // counter-scale always tracks the current zoom.
+          // The compass rose is not a pin: it stays part of the map
+          // layer and scales with the map image.
+          var eff = el.hasAttribute("data-compasswrap") ? sf : sf / (scale || 1);
           el.style.transformOrigin = bottom ? "50% 100%" : "50% 50%";
           el.style.transform = anch + " scale(" + eff + ")";
         }
@@ -4251,6 +4291,16 @@
           s = s || 2.4;
           var fs = frameSize();
           applyView(s, fs.w / 2 - (px / 100) * fs.w * s, fs.h / 2 - (py / 100) * fs.w * aspect * s);
+        }
+        // Pan (without changing the zoom) so a point sits centred
+        // horizontally and a little above centre vertically, leaving
+        // the lower part of the frame clear. The size editor uses this
+        // so the item being resized is in view, above its docked
+        // panel, the moment the editor opens.
+        function centerOn(px, py) {
+          userMoved = true;
+          var fs = frameSize();
+          applyView(scale, fs.w * 0.5 - (px / 100) * fs.w * scale, fs.h * 0.4 - (py / 100) * fs.w * aspect * scale);
         }
 
         var lastDrag = { key: null, t: 0 };
@@ -4370,7 +4420,7 @@
                 + '<button type="button" class="map-pin art' + (isSel ? " selected" : "") + pStateCls + pDrop + '" data-pin="' + p.id + '" aria-label="Pin ' + p.number + ": " + esc(p.label) + (pLocked ? " (locked)" : "") + (pHidden ? " (hidden from players)" : "") + '"' + (pDrop ? ' style="animation-delay:' + Math.min(i * 60, 600) + "ms, " + (i * 130) + 'ms"' : "") + '>'
                 + '<img src="' + art + '" alt="" draggable="false">' + '<span class="badge">' + p.number + "</span>" + pBadges
                 + "</button>"
-                + (labelOn ? '<span class="map-label">' + esc(p.label) + "</span>" : "")
+                + (labelOn ? labelHtml("pin", p.id, p.label) : "")
                 + "</div>";
             } else {
               var pending = p.status === "pending";
@@ -4379,7 +4429,7 @@
                 + '<span class="pin-top"><span class="pin-ring"></span><span class="pin-head"><span class="pin-num">' + p.number + "</span></span></span>"
                 + '<span class="pin-stem"></span>' + pBadges
                 + "</button>"
-                + (labelOn ? '<span class="map-label">' + esc(p.label) + "</span>" : "")
+                + (labelOn ? labelHtml("pin", p.id, p.label) : "")
                 + "</div>";
             }
           });
@@ -4401,7 +4451,7 @@
               + '<button type="button" class="map-pin' + (art ? " art" : "") + (isSel ? " selected" : "") + mStateCls + mDrop + '" data-marker="' + m.id + '" data-kind="' + esc(m.kind) + '" aria-label="Marker: ' + esc(name) + (mLocked ? " (locked)" : "") + (mHidden ? " (hidden from players)" : "") + '">'
               + (art ? '<img src="' + art + '" alt="" draggable="false">' : (m.kind === "party" ? "\u2605" : m.kind === "location" ? "\u25C6" : "\u2022")) + mBadges
               + "</button>"
-              + (labelOn ? '<span class="map-label">' + esc(m.label) + "</span>" : "")
+              + (labelOn ? labelHtml("marker", m.id, m.label) : "")
               + "</div>";
           });
           var compass = opts.getCompass ? opts.getCompass() : null;
@@ -4629,6 +4679,7 @@
         return {
           fit: fit,
           zoomToPoint: zoomToPoint,
+          centerOn: centerOn,
           refreshPins: buildPins,
           toMapCoords: toMapCoords,
           getView: function () { return { s: scale, x: tx, y: ty }; },
@@ -4692,7 +4743,7 @@
         html += '<button type="button" class="btn btn-outline" id="pinSuggest">Suggest a change</button>';
         html += copyLinkBtnHtml("#/map/" + encodeURIComponent(pin.mapKey) + "/pin/" + pin.id, "Copy link to this pin", "btn btn-outline");
         if (gmIsUnlocked()) html += '<button type="button" class="btn btn-outline" id="pinEditText">Edit label</button>';
-        if (gmIsUnlocked()) html += '<button type="button" class="btn btn-outline" id="pinEditSize">Change size</button>';
+        if (gmIsUnlocked()) html += '<button type="button" class="btn btn-outline" id="pinEditSize">Change size &amp; text</button>';
         html += "</div></section>";
         container.innerHTML = html;
         wireWikiLinks(container);
@@ -4745,8 +4796,7 @@
           + '<button type="button" class="btn btn-outline" id="markerZoom">Zoom to marker</button>'
           + '<button type="button" class="btn btn-outline" id="markerSuggest">Suggest a change</button>'
           + (gmIsUnlocked() ? '<button type="button" class="btn btn-outline" id="markerEditText">Edit label</button>' : "")
-          + (gmIsUnlocked() && m.kind !== "party" ? '<button type="button" class="btn btn-outline" id="markerEditSize">Change size</button>' : "")
-          + (gmIsUnlocked() && m.kind === "party" ? '<span class="small muted" style="align-self:center">The party marker keeps a constant size on screen at any zoom; it has no size setting.</span>' : "")
+          + (gmIsUnlocked() ? '<button type="button" class="btn btn-outline" id="markerEditSize">Change size &amp; text</button>' : "")
           + "</div></section>";
         container.innerHTML = html;
         wireWikiLinks(container);
@@ -4812,6 +4862,32 @@
         for (var i = 0; i < presets.length; i++) presets[i].addEventListener("click", function () { apply(Number(this.getAttribute("data-sizeval"))); });
         return function () { return current; };
       }
+      function textSizeControlHtml(prefix, factor) {
+        var pct = Math.round(factor * 100);
+        return '<label class="gm-field"><span>Label text size: <span id="' + prefix + 'TextVal">' + pct + '%</span></span>'
+          + '<input type="range" id="' + prefix + 'Text" min="50" max="200" step="5" value="' + pct + '"></label>'
+          + '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.25rem">'
+          + '<button type="button" class="ghost-btn" data-textpreset="' + prefix + '" data-textval="0.75">Small</button>'
+          + '<button type="button" class="ghost-btn" data-textpreset="' + prefix + '" data-textval="1">Default</button>'
+          + '<button type="button" class="ghost-btn" data-textpreset="' + prefix + '" data-textval="1.35">Large</button>'
+          + '<button type="button" class="ghost-btn" data-textpreset="' + prefix + '" data-textval="1.7">Extra large</button></div>';
+      }
+      function wireTextSizeControl(prefix, onChange) {
+        var slider = document.getElementById(prefix + "Text");
+        var val = document.getElementById(prefix + "TextVal");
+        if (!slider) return function () { return 1; };
+        var current = Number(slider.value) / 100;
+        function apply(f) {
+          current = f;
+          slider.value = Math.round(f * 100);
+          if (val) val.textContent = Math.round(f * 100) + "%";
+          onChange(f);
+        }
+        slider.addEventListener("input", function () { apply(Number(this.value) / 100); });
+        var presets = document.querySelectorAll('[data-textpreset="' + prefix + '"]');
+        for (var i = 0; i < presets.length; i++) presets[i].addEventListener("click", function () { apply(Number(this.getAttribute("data-textval"))); });
+        return function () { return current; };
+      }
       // Positions are stored exactly where the GM drops an item: there
       // is no grid or hex snapping (the old hex snap never lined up with
       // the drawn grid, so it was removed at the GM's request).
@@ -4821,7 +4897,7 @@
       function mapToolsHtml() {
         var html = '<section aria-label="GM Map Tools" style="margin-top:2rem;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface);padding:1rem">'
           + '<h3 class="font-display" style="font-size:1.125rem;font-weight:600;margin:0">GM Map Tools</h3>'
-          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Pins and markers start locked; unlock one to drag it, and dragging keeps your zoom. Right-click any item to edit its label, change its icon or its size, lock or unlock it, hide or reveal it, duplicate, or delete it. The party marker has no size setting: it does not scale with the map and keeps a constant size on screen at any zoom. Items drop exactly where you put them; there is no grid snapping.</p>'
+          + '<p class="small muted" style="margin-top:0.25rem">Right-click the map (long-press on touch) and pick an icon by name to drop it, then give it a label. Pins and markers start locked; unlock one to drag it, and dragging keeps your zoom. Right-click any item to edit its label, change its icon, its size or its label text size, lock or unlock it, hide or reveal it, duplicate, or delete it. Every pin and marker, the party marker included, holds a constant size on screen at any zoom, and each one has its own icon size and label text size. Labels wrap onto extra lines instead of stretching wide across the map. Items drop exactly where you put them; there is no grid snapping.</p>'
           + '<div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem"><p class="small" style="margin:0"><strong>Upload a new icon or token</strong></p>'
           + '<label class="gm-field"><span>Icon name</span><input type="text" id="iconName" class="search-input"></label>'
           + '<label class="gm-field"><span>Category</span><select id="iconCat" class="search-input"><option>Travel</option><option>Castles</option><option>Medieval</option><option>Roman</option><option>Sylvan</option></select></label>'
@@ -5025,9 +5101,10 @@
           if (kind === "pin") DATA.pins = DATA.pins.filter(function (p) { return p.id !== id; });
           else MARKERS = MARKERS.filter(function (m) { return m.id !== id; });
           delete MAP_EXTRAS.sizes[kind + "-" + id];
+          delete MAP_EXTRAS.textSizes[kind + "-" + id];
           delete MAP_EXTRAS.locks[kind + "-" + id];
           if (kind === "marker") delete MAP_EXTRAS.links["marker-" + id];
-          saveExtras("sizes"); saveExtras("locks");
+          saveExtras("sizes"); saveExtras("textSizes"); saveExtras("locks");
           if (kind === "marker") saveExtras("links");
           if (state.selectedPinId === id) state.selectedPinId = null;
           if (state.selectedMarkerId === id) state.selectedMarkerId = null;
@@ -5051,6 +5128,8 @@
             MAP_EXTRAS.locks["pin-" + np.id] = false; saveExtras("locks");
             var sz = MAP_EXTRAS.sizes["pin-" + id];
             if (sz != null) { MAP_EXTRAS.sizes["pin-" + np.id] = sz; saveExtras("sizes"); }
+            var ts = MAP_EXTRAS.textSizes["pin-" + id];
+            if (ts != null) { MAP_EXTRAS.textSizes["pin-" + np.id] = ts; saveExtras("textSizes"); }
             state.selectedPinId = np.id; state.selectedMarkerId = null;
             setMapMsg("Copied as pin " + np.number + ". Drag it where you want it.");
             renderPreservingMapView();
@@ -5066,55 +5145,104 @@
             if (lk) { MAP_EXTRAS.links["marker-" + nm.id] = lk; saveExtras("links"); }
             var sz2 = MAP_EXTRAS.sizes["marker-" + id];
             if (sz2 != null) { MAP_EXTRAS.sizes["marker-" + nm.id] = sz2; saveExtras("sizes"); }
+            var ts2 = MAP_EXTRAS.textSizes["marker-" + id];
+            if (ts2 != null) { MAP_EXTRAS.textSizes["marker-" + nm.id] = ts2; saveExtras("textSizes"); }
             state.selectedMarkerId = nm.id; state.selectedPinId = null;
             setMapMsg("Copied. Drag it where you want it.");
             renderPreservingMapView();
           });
         }
       }
-      // Size editor for a pin or a non-party marker. The party marker is
-      // exempt: it has no size setting and does not scale with the map
-      // (it keeps a constant size on screen at any zoom), so this
-      // dialog refuses it. The slider previews
-      // live on the map behind the dialog (through state.sizePreview,
-      // which itemSize checks first); Save persists the factor through
-      // setItemSize, Cancel throws the preview away.
+      // Size editor for any pin or marker, the party marker included:
+      // every item now behaves the same way, holding a constant size
+      // on screen at any zoom, with its own icon size and label text
+      // size on top. The panel is DOCKED to the bottom of the screen
+      // (the .docked backdrop has no dim and lets pointer events
+      // through), the item is centred in the map above it when the
+      // editor opens, and a live preview inside the panel shows the
+      // icon and its wrapped label at the chosen sizes — so the item
+      // being resized is never hidden behind the editor. Both sliders
+      // preview live on the map (through state.sizePreview and
+      // state.labelPreview, which itemSize and labelSize check
+      // first); Save persists both factors, Cancel throws the
+      // previews away.
       function openSizeDialog(kind, id) {
         var item = mapItemByKind(kind, id);
         if (!item) return;
-        if (kind === "marker" && item.kind === "party") {
-          setMapMsg("The party marker is exempt from sizing: it keeps a constant size on screen at any zoom and does not scale with the map.");
-          return;
-        }
         closeMapCtx();
         var old = document.getElementById("mapDialog");
         if (old) old.remove();
+        // Bring the item into view above where the docked panel will
+        // sit, so it can be watched while the sliders move.
+        var frameEl = document.getElementById("mapFrame");
+        if (frameEl) frameEl.scrollIntoView({ block: "nearest" });
+        if (stage && stage.centerOn) stage.centerOn(item.x, item.y);
         var wrap = document.createElement("div");
-        wrap.className = "map-dialog-backdrop";
+        wrap.className = "map-dialog-backdrop docked";
         wrap.id = "mapDialog";
-        var title = kind === "pin" ? "Resize pin " + item.number : "Resize marker";
+        var title = kind === "pin" ? "Resize pin " + item.number : (item.kind === "party" ? "Resize the party marker" : "Resize marker");
         var startFactor = itemSize(kind, id);
-        wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
+        var startText = labelSize(kind, id);
+        var effIcon = kind === "marker" ? (item.iconKey || (item.kind === "party" ? "party-token" : null)) : item.iconKey;
+        var art = effIcon ? iconSrc(effIcon) : null;
+        var previewIcon;
+        if (art) {
+          previewIcon = '<span class="sp-art"><img src="' + esc(art) + '" alt="" draggable="false"></span>';
+        } else if (kind === "pin") {
+          previewIcon = '<span class="pin-top"><span class="pin-head"><span class="pin-num">' + item.number + '</span></span></span>';
+        } else {
+          previewIcon = '<span class="sp-glyph" aria-hidden="true">' + (item.kind === "party" ? "\u2605" : "\u2022") + "</span>";
+        }
+        var labelText = (item.label || "").trim() || (kind === "pin" ? "Pin " + item.number : "Marker");
+        wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
-          + '<p class="small muted" style="margin-top:0.375rem">Drag the slider and watch the item change on the map behind this box. The size is its own, on top of how it already grows and shrinks with the map zoom. 100% is the old full size; pins and markers now start at 75%. The slider goes down to 10%, small enough for an item to fit inside a single hex on the map.</p>'
+          + '<p class="small muted" style="margin-top:0.375rem">This panel sits at the bottom so the item stays visible on the map above it — it has been centred there for you, and you can still pan and zoom the map while this is open. Every pin and marker now holds a steady size on screen at any zoom, like the party marker. Icon size runs down to 10%, small enough to fit inside a single hex; pins and markers start at 75%, the party marker at 100%. Labels wrap onto extra lines instead of stretching wide, and the text size below is this item\u2019s own.</p>'
+          + '<div class="size-preview" aria-hidden="true"><div class="sp-iconbox"><span class="sp-icon-inner" id="dlgPreviewIcon">' + previewIcon + '</span></div><span class="sp-label" id="dlgPreviewLabel">' + esc(labelText) + "</span></div>"
           + sizeControlHtml("dlg", startFactor)
+          + textSizeControlHtml("dlgT", startText)
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
-          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSaveSize">Save size</button><button type="button" class="btn btn-outline" id="dlgCancelSize">Cancel</button></div></div>';
+          + '<div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem"><button type="button" class="btn btn-deep" id="dlgSaveSize">Save sizes</button><button type="button" class="btn btn-outline" id="dlgCancelSize">Cancel</button></div></div>';
         document.body.appendChild(wrap);
         var key = kind + "-" + id;
-        function clearPreview() { if (state.sizePreview) delete state.sizePreview[key]; if (stage) stage.refreshPins(); }
+        var previewIconEl = document.getElementById("dlgPreviewIcon");
+        var previewLabelEl = document.getElementById("dlgPreviewLabel");
+        function updatePreview() {
+          var f = state.sizePreview && state.sizePreview[key] != null ? state.sizePreview[key] : startFactor;
+          var tf = state.labelPreview && state.labelPreview[key] != null ? state.labelPreview[key] : startText;
+          if (previewIconEl) {
+            previewIconEl.style.transform = "scale(" + f + ")";
+            // A transform does not grow the layout box, so size the
+            // box to the scaled icon or a large preview would clip.
+            if (previewIconEl.parentElement) previewIconEl.parentElement.style.minHeight = Math.round(46 * f + 6) + "px";
+          }
+          if (previewLabelEl) previewLabelEl.style.fontSize = Math.round(11 * tf * 10) / 10 + "px";
+        }
+        function clearPreview() {
+          if (state.sizePreview) delete state.sizePreview[key];
+          if (state.labelPreview) delete state.labelPreview[key];
+          if (stage) stage.refreshPins();
+        }
         var getFactor = wireSizeControl("dlg", function (f) {
           if (!state.sizePreview) state.sizePreview = {};
           state.sizePreview[key] = f;
           if (stage) stage.refreshPins();
+          updatePreview();
         });
+        var getTextFactor = wireTextSizeControl("dlgT", function (f) {
+          if (!state.labelPreview) state.labelPreview = {};
+          state.labelPreview[key] = f;
+          if (stage) stage.refreshPins();
+          updatePreview();
+        });
+        updatePreview();
         document.getElementById("dlgCancelSize").addEventListener("click", function () { clearPreview(); wrap.remove(); });
-        wrap.addEventListener("pointerdown", function (ev) { if (ev.target === wrap) { clearPreview(); wrap.remove(); } });
         document.getElementById("dlgSaveSize").addEventListener("click", function () {
           var f = getFactor();
+          var tf = getTextFactor();
           delete state.sizePreview[key];
-          setItemSize(kind, id, f).then(function (ok) {
-            setMapMsg(ok ? "Size saved at " + Math.round(f * 100) + "%." : "That size could not be saved.");
+          delete state.labelPreview[key];
+          Promise.all([setItemSize(kind, id, f), setLabelSize(kind, id, tf)]).then(function (oks) {
+            setMapMsg(oks[0] && oks[1] ? "Saved: icon at " + Math.round(f * 100) + "%, label text at " + Math.round(tf * 100) + "%." : "Those sizes could not be saved.");
           });
           wrap.remove();
           if (stage) stage.refreshPins();
@@ -5134,7 +5262,7 @@
         wrap.innerHTML = '<div class="map-dialog" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">'
           + '<h3>' + esc(title) + "</h3>"
           + '<label class="gm-field"><span>Label text</span><input type="text" id="dlgLabel" class="search-input" value="' + esc(item.label || "") + '"></label>'
-          + '<p class="small muted" style="margin-top:0.375rem">The label sits centered underneath the icon on the map. It is also the name used in the pin list and the item panel.</p>'
+          + '<p class="small muted" style="margin-top:0.375rem">The label sits centered underneath the icon on the map and wraps onto extra lines rather than stretching wide. Its text size is set separately, under Change size &amp; text. It is also the name used in the pin list and the item panel.</p>'
           + '<div style="margin-top:0.5rem"><button type="button" class="ghost-btn" id="dlgShowLabel" aria-pressed="' + showLabel + '">' + (showLabel ? "Label shown on the map" : "Label hidden on the map") + "</button></div>"
           + '<label class="gm-field"><span>Note shown in its panel</span><textarea id="dlgNote" class="search-input" rows="5">' + esc(item.note || "") + "</textarea></label>"
           + '<p class="small" id="dlgMsg" role="status" style="margin:0.5rem 0 0"></p>'
@@ -5279,11 +5407,7 @@
           var hidden = item.visibility === "gm";
           items.push({ label: "Edit label\u2026", action: function () { openRenameDialog(kind, id); } });
           items.push({ label: "Change icon\u2026", iconKey: item.iconKey || null, glyph: item.iconKey ? null : "\u25C6", action: function () { openIconPickerDialog(kind, id); } });
-          if (kind === "marker" && item.kind === "party") {
-            items.push({ note: "The party marker is exempt from sizing: it keeps a constant size on screen at any zoom and does not scale with the map." });
-          } else {
-            items.push({ label: "Change size\u2026 (" + Math.round(itemSize(kind, id) * 100) + "%)", action: function () { openSizeDialog(kind, id); } });
-          }
+          items.push({ label: "Change size & text\u2026 (icon " + Math.round(itemSize(kind, id) * 100) + "%, text " + Math.round(labelSize(kind, id) * 100) + "%)", action: function () { openSizeDialog(kind, id); } });
           items.push({ label: locked ? "Unlock (allow dragging)" : "Lock (stop dragging)", action: function () { toggleItemLock(kind, id); } });
           items.push({ label: hidden ? "Reveal to players" : "Hide from players", action: function () { toggleItemHidden(kind, id); } });
           items.push({ label: "Duplicate", action: function () { duplicateMapItem(kind, id); } });
@@ -5558,7 +5682,7 @@
           + copyLinkBtnHtml("#/map/" + encodeURIComponent(state.mapKey), "Copy link to this map")
           + "</div>";
         if (gmIsUnlocked()) {
-          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Pins, markers, and their labels are part of the map layer, so they grow and shrink with the map as you zoom, and each label sits centered underneath its icon. The party marker is the exception: it does not scale with the map and keeps a constant size on screen at any zoom. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to edit its label, change its icon or its size, lock or unlock it, hide or reveal it, duplicate, or delete it; a selected item also has Edit label and Change size buttons in its panel. Pins and markers now start at 75% size; resize any of them individually except the party marker, which is exempt: it does not scale with the map and keeps a constant size on screen at any zoom. Items drop exactly where you put them; there is no grid snapping. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
+          html += '<p class="small muted" style="margin-top:0.5rem">GM editing: drag an icon from the library below onto the map, tap an icon then tap the map, or right-click the map (long-press on touch) and pick an icon from the picture list. Every pin and marker behaves the same way the party marker does: it holds a constant size on screen at any zoom instead of growing and shrinking with the map, and each label sits centered underneath its icon. Labels wrap onto extra lines once they pass a modest width, so a long name stacks neatly instead of stretching across neighbouring hexes. Every pin and marker starts locked, so nothing moves by accident: right-click an item and unlock it to drag it, then lock it again when it sits right. Drag any unlocked pin or marker to move it. Right-click any item to edit its label, change its icon, its size or its label text size, lock or unlock it, hide or reveal it, duplicate, or delete it; a selected item also has Edit label and Change size &amp; text buttons in its panel. Pins and markers start at 75% size and the party marker at 100%; resize any of them individually, icon and label text alike — the size editor docks at the bottom of the screen and centres the item on the map, so you can watch it change as you drag the sliders. Items drop exactly where you put them; there is no grid snapping. With an item selected, Delete removes it (locked items must be unlocked first). Items marked <span class="hidden-tag" style="display:inline-block;border-radius:999px;background:var(--danger);color:#fff;padding:0 0.45rem;font-size:0.7rem;font-weight:700;text-transform:uppercase">Hidden</span> are visible only to you.</p>'
             + '<p class="map-status" id="mapStatus" role="status">' + esc(state.mapMsg || "") + "</p>"
             + iconLibraryHtml();
         }
